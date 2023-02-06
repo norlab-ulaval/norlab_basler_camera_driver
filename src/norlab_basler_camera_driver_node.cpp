@@ -239,13 +239,13 @@ void GrabLoop()
 
 void GetParameters(ros::NodeHandle handler)
 {
-    handler.getParam("/stereo/norlab_bracketing/startup_user_set", parameters["startup_user_set"]); // Not Use for now
-    handler.getParam("/stereo/norlab_bracketing/image_encoding", parameters["image_encoding"]);
-    handler.getParam("/stereo/norlab_bracketing/camera1_calibration_url", parameters["camera1_calibration_url"]);
-    handler.getParam("/stereo/norlab_bracketing/camera2_calibration_url", parameters["camera2_calibration_url"]);
-    handler.getParam("/stereo/norlab_bracketing/frame_rate", frame_rate);
-    handler.getParam("/stereo/norlab_bracketing/enable_bracketing", enable_bracketing);
-    handler.getParam("/stereo/norlab_bracketing/bracketing_values", exposures);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node/startup_user_set", parameters["startup_user_set"]); // Not Use for now
+    handler.getParam("/stereo/norlab_basler_camera_driver_node/image_encoding", parameters["image_encoding"]);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node/camera1_calibration_url", parameters["camera1_calibration_url"]);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node/camera2_calibration_url", parameters["camera2_calibration_url"]);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node/frame_rate", frame_rate);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node/enable_bracketing", enable_bracketing);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node/bracketing_values", exposures);
 }
 
 void InitCameraInfo(ros::NodeHandle cam1, ros::NodeHandle cam2)
@@ -261,7 +261,7 @@ void InitCameraInfo(ros::NodeHandle cam1, ros::NodeHandle cam2)
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "norlab_bracketing_node");
+    ros::init(argc, argv, "norlab_basler_camera_driver_node");
     ros::NodeHandle nh;
     ros::NodeHandle nh_cam1("camera1");
     ros::NodeHandle nh_cam2("camera2");

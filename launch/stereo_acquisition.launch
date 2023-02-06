@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
     <group ns="stereo">
-		<arg name="node_name" default="norlab_stereo_driver_node" />
+		<arg name="node_name" default="norlab_basler_camera_driver_node" />
 		<arg name="startup_user_set" default="UserSet1" />
 		<arg name="image_encoding" default="bayer_rggb8" />
 		<arg name="enable_bracketing" default="true" />
@@ -14,7 +14,7 @@
 		<arg unless="$(arg debug)" name="launch_prefix" value="" />
     	<arg if="$(arg debug)" name="launch_prefix" value="gdb -ex run --args" />
 
-    	<node name="$(arg node_name)" pkg="norlab_stereo_driver_node" type="norlab_stereo_driver_node" output="screen"
+    	<node name="$(arg node_name)" pkg="norlab_basler_camera_driver" type="norlab_basler_camera_driver_node" output="screen"
           	respawn="$(arg respawn)" launch-prefix="$(arg launch_prefix)">
         	<param name="startup_user_set" value="$(arg startup_user_set)"/>
 			<param name="image_encoding" value="$(arg image_encoding)"/>
