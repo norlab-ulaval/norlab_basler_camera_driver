@@ -7,6 +7,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include <ros/ros.h>
+#include "std_msgs/String.h"
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
 #include <camera_info_manager/camera_info_manager.h>
@@ -26,7 +27,9 @@ bool enable_bracketing;
 int frame_rate;
 image_transport::Publisher out_image_panoramic_pub;
 image_transport::CameraPublisher out_image_camera1_pub;
+ros::Publisher chunkdata_camera1_pub;
 image_transport::CameraPublisher out_image_camera2_pub;
+ros::Publisher chunkdata_camera2_pub;
 std::unique_ptr<camera_info_manager::CameraInfoManager> c1info_;
 std::unique_ptr<camera_info_manager::CameraInfoManager> c2info_;
 size_t maxCamerasToUse = 2;
@@ -199,6 +202,24 @@ void PublishCamData(Mat& image, sensor_msgs::CameraInfo camera_info, string fram
     publisher.publish(out_image_camera, ci);
 }
 
+void PublishCamChunkData(CBaslerUniversalGrabResultPtr image_ptr, string frame_id, ros::Publisher& publisher)
+{
+    std_msgs::String msg;
+    std_msgs::Header camera_header;
+    camera_header.frame_id = frame_id;
+    std::map<string, string> chunk_infos;
+    chunk_infos = {{"Timestamp: ", std::to_string(image_ptr->ChunkTimestamp.GetValue())},
+                   {"FrameID: ", std::to_string(image_ptr->ChunkFrameID.GetValue())},
+                   {"ExposureTime: ", std::to_string(image_ptr->ChunkExposureTime.GetValue())}};
+    std::string msg_to_publish;
+    for(std::map<string,string>::iterator it = chunk_infos.begin(); it != chunk_infos.end(); ++it)
+    {
+        msg_to_publish += it->first + it->second + " | ";
+    }
+    msg.data = msg_to_publish;
+    publisher.publish(msg);
+}
+
 void GrabLoop()
 {
     CBaslerUniversalGrabResultPtr camera1_ptrGrabResult;
@@ -216,6 +237,9 @@ void GrabLoop()
 
         PublishCamData(image1, c1info_->getCameraInfo(), "camera1_link", out_image_camera1_pub);
         PublishCamData(image2, c2info_->getCameraInfo(), "camera2_link", out_image_camera2_pub);
+
+        PublishCamChunkData(camera1_ptrGrabResult, "camera1_link", chunkdata_camera1_pub);
+        PublishCamChunkData(camera2_ptrGrabResult, "camera2_link", chunkdata_camera2_pub);
 
         // Publish Panoramic
         Mat panoramic;
@@ -274,7 +298,9 @@ int main(int argc, char **argv)
     image_transport::ImageTransport it_pano(nh_pano);
     out_image_panoramic_pub = it_pano.advertise("image", 10);
     out_image_camera1_pub = it_cam1.advertiseCamera("image", 10);
+    chunkdata_camera1_pub = nh_cam1.advertise<std_msgs::String>("chunkdata", 5000);
     out_image_camera2_pub = it_cam2.advertiseCamera("image", 10);
+    chunkdata_camera2_pub = nh_cam2.advertise<std_msgs::String>("chunkdata", 5000);
 
     InitCameras();
     InitCameraInfo(nh_cam1, nh_cam2);
