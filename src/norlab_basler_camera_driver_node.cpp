@@ -26,8 +26,9 @@ using namespace cv;
 std::unique_ptr<CBaslerUniversalInstantCameraArray> cameras;
 std::map<string, string> parameters;
 bool enable_bracketing;
+bool enable_panoramic;
 int frame_rate;
-image_transport::Publisher out_image_panoramic_pub;
+image_transport::Publisher out_image_panoramic_RGB8_pub;
 image_transport::CameraPublisher out_image_camera1_pub;
 ros::Publisher metadata_pub;
 image_transport::CameraPublisher out_image_camera2_pub;
@@ -48,12 +49,12 @@ public:
     {
         (*cameras)[camera1_index].AcquisitionStart.Execute();
         (*cameras)[camera1_index].SoftwareSignalPulse.Execute();
-        if (enable_bracketing)
-        {
-            (*cameras)[camera1_index].ExposureTime.SetValue(exposures[idxExposures]);
-            (*cameras)[camera2_index].ExposureTime.SetValue(exposures[idxExposures]);
-            idxExposures = (idxExposures + 1) % exposures.size();
-        }
+        // if (enable_bracketing)
+        // {
+        //     (*cameras)[camera1_index].ExposureTime.SetValue(exposures[idxExposures]);
+        //     (*cameras)[camera2_index].ExposureTime.SetValue(exposures[idxExposures]);
+        //     idxExposures = (idxExposures + 1) % exposures.size();
+        // }
     }
 };
 
@@ -68,6 +69,7 @@ void SetSequenceExposure(CBaslerUniversalInstantCamera& camera)
         camera.SequencerSetSelector.SetValue(i);
         camera.SequencerSetLoad.Execute();
         camera.ExposureTime.SetValue(exposures[i]);
+        camera.PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);
         camera.SequencerSetStart.SetValue(0);
         camera.SequencerPathSelector.SetValue(0);
         camera.SequencerSetNext.SetValue((i+1)%exposures.size());
@@ -108,20 +110,13 @@ void EnableMetadata(CBaslerUniversalInstantCamera& camera)
     // camera.ChunkEnable.SetValue(true);
 }
 
-void InitializeExposureTime()
+void InitializeExposureTimeAuto()
 {
-    if (enable_bracketing)
-    {
-        (*cameras)[camera1_index].ExposureTime.SetValue(exposures[idxExposures]);        
-        (*cameras)[camera2_index].ExposureTime.SetValue(exposures[idxExposures]);
-        idxExposures = 1;
-    }
-    else
-    {
-        cout << "No_bracketing" << endl;
-        // (*cameras)[camera1_index].ExposureAuto.SetValue(Basler_UniversalCameraParams::ExposureAuto_Continuous);        
-        // (*cameras)[camera2_index].ExposureAuto.SetValue(Basler_UniversalCameraParams::ExposureAuto_Continuous);
-    }
+    ROS_WARN("No bracketing. Using auto exposure time. Might decrease the frame rate.");
+    (*cameras)[camera1_index].ExposureAuto.SetValue(Basler_UniversalCameraParams::ExposureAuto_Continuous);
+    (*cameras)[camera1_index].PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);        
+    (*cameras)[camera2_index].ExposureAuto.SetValue(Basler_UniversalCameraParams::ExposureAuto_Continuous);
+    (*cameras)[camera2_index].PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);
 }
 
 void CreateAndOpenPylonDevice(CTlFactory& tlFactory, CDeviceInfo device, CBaslerUniversalInstantCamera& camera, size_t i)
@@ -166,9 +161,14 @@ bool InitCameras()
 
     CAcquireSingleFrameConfiguration sf_config = CAcquireSingleFrameConfiguration();
     sf_config.ApplyConfiguration((*cameras)[camera1_index].GetNodeMap());
-    cout << "Sequencer call" << endl;
-    SetSequenceExposure((*cameras)[camera1_index]);
-    // InitializeExposureTime();
+    if (enable_bracketing)
+    {
+        SetSequenceExposure((*cameras)[camera1_index]);
+    }
+    else
+    {
+        InitializeExposureTimeAuto();
+    }
     return true;
 }
 
@@ -226,14 +226,15 @@ void DisplayDataOnImage(Mat& image, CBaslerUniversalGrabResultPtr ptrGrabResult)
 
 void PublishCamData(Mat& image, sensor_msgs::CameraInfo camera_info, string frame_id, image_transport::CameraPublisher& publisher, ros::Time time)
 {
-    std_msgs::Header camera_header;
-    sensor_msgs::ImagePtr out_image_camera = cv_bridge::CvImage(camera_header, parameters["image_encoding"], image).toImageMsg();
-    out_image_camera->header.frame_id = frame_id;
-    out_image_camera->header.stamp = time;
+    cv_bridge::CvImage out_image_msg;
+    out_image_msg.header.stamp = time;
+    out_image_msg.header.frame_id = frame_id;
+    out_image_msg.encoding = sensor_msgs::image_encodings::BAYER_RGGB16; //TYPE_16UC1
+    out_image_msg.image = image;
     sensor_msgs::CameraInfoPtr ci(new sensor_msgs::CameraInfo(camera_info));
-    ci->header.frame_id = out_image_camera->header.frame_id;
-    ci->header.stamp = out_image_camera->header.stamp;
-    publisher.publish(out_image_camera, ci);
+    ci->header.frame_id = out_image_msg.header.frame_id;
+    ci->header.stamp = out_image_msg.header.stamp;
+    publisher.publish(out_image_msg.toImageMsg(), ci);
 }
 
 void PublishCamMetadata(CBaslerUniversalGrabResultPtr image_ptr, ros::Publisher& publisher, ros::Time time)
@@ -255,30 +256,44 @@ void GrabLoop()
 
     if (camera1_ptrGrabResult->GrabSucceeded() && camera2_ptrGrabResult->GrabSucceeded())
     {
-        Mat image1 = Mat(camera1_ptrGrabResult->GetHeight(), camera1_ptrGrabResult->GetWidth(), CV_8UC1, (uint8_t *) camera1_ptrGrabResult->GetBuffer());
-        Mat image2 = Mat(camera2_ptrGrabResult->GetHeight(), camera2_ptrGrabResult->GetWidth(), CV_8UC1, (uint8_t *) camera2_ptrGrabResult->GetBuffer());
-
+        Mat cv_image1_bayerRG16(camera1_ptrGrabResult->GetHeight(), camera1_ptrGrabResult->GetWidth(), CV_16UC1, (uint16_t *) camera1_ptrGrabResult->GetBuffer());
+        Mat cv_image2_bayerRG16(camera2_ptrGrabResult->GetHeight(), camera2_ptrGrabResult->GetWidth(), CV_16UC1, (uint16_t *) camera2_ptrGrabResult->GetBuffer());
         // DisplayDataOnImage(image1, camera1_ptrGrabResult);
         // DisplayDataOnImage(image2, camera2_ptrGrabResult);
 
         ros::Time timestamp_ros = ros::Time::now();
-        PublishCamData(image1, c1info_->getCameraInfo(), "camera1_link", out_image_camera1_pub, timestamp_ros);
-        PublishCamData(image2, c2info_->getCameraInfo(), "camera2_link", out_image_camera2_pub, timestamp_ros);
+        PublishCamData(cv_image1_bayerRG16, c1info_->getCameraInfo(), "camera1_link", out_image_camera1_pub, timestamp_ros);
+        PublishCamData(cv_image2_bayerRG16, c2info_->getCameraInfo(), "camera2_link", out_image_camera2_pub, timestamp_ros);
         PublishCamMetadata(camera1_ptrGrabResult, metadata_pub, timestamp_ros);
 
-        // Publish Panoramic
-        Mat panoramic;
-        try
+        // Publish panoramic_8bits
+        if (enable_panoramic)
         {
-            hconcat(image1, image2, panoramic);
+            Mat cv_image1_RGB16(cv_image1_bayerRG16.cols, cv_image1_bayerRG16.rows, CV_16UC3);
+            cvtColor(cv_image1_bayerRG16, cv_image1_RGB16, COLOR_BayerRG2RGB);
+            Mat cv_image1_RGB8;
+            normalize(cv_image1_RGB16, cv_image1_RGB8, 0, 255, NORM_MINMAX, CV_8UC3);
+
+            Mat cv_image2_RGB16(cv_image2_bayerRG16.cols, cv_image2_bayerRG16.rows, CV_16UC3);
+            cvtColor(cv_image2_bayerRG16, cv_image2_RGB16, COLOR_BayerRG2RGB);
+            Mat cv_image2_RGB8;
+            normalize(cv_image2_RGB16, cv_image2_RGB8, 0, 255, NORM_MINMAX, CV_8UC3);
+            Mat cv_panoramic_RGB8;
+            try
+            {
+                hconcat(cv_image1_RGB8, cv_image2_RGB8, cv_panoramic_RGB8);
+            }
+            catch (...)
+            {
+                ROS_INFO("No concatenation");
+            }
+            cv_bridge::CvImage out_panoramic_RGB8_msg;
+            out_panoramic_RGB8_msg.header.stamp = timestamp_ros;
+            out_panoramic_RGB8_msg.header.frame_id = "panoramic_link";
+            out_panoramic_RGB8_msg.encoding = sensor_msgs::image_encodings::TYPE_8UC3; //TYPE_16UC1
+            out_panoramic_RGB8_msg.image = cv_panoramic_RGB8;
+            out_image_panoramic_RGB8_pub.publish(out_panoramic_RGB8_msg.toImageMsg());
         }
-        catch (...)
-        {
-            ROS_INFO("No concatenation");
-        }
-        std_msgs::Header panoramic_header;
-        sensor_msgs::ImagePtr out_image_panoramic = cv_bridge::CvImage(panoramic_header, parameters["image_encoding"], panoramic).toImageMsg();
-        out_image_panoramic_pub.publish(out_image_panoramic);
 
         camera1_ptrGrabResult.Release();
         camera2_ptrGrabResult.Release();
@@ -297,6 +312,7 @@ void GetParameters(ros::NodeHandle handler)
     handler.getParam("/stereo/norlab_basler_camera_driver_node/camera2_calibration_url", parameters["camera2_calibration_url"]);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/frame_rate", frame_rate);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/enable_bracketing", enable_bracketing);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node/enable_panoramic", enable_panoramic);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/bracketing_values", exposures);
 }
 
@@ -317,14 +333,14 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
     ros::NodeHandle nh_cam1("camera1");
     ros::NodeHandle nh_cam2("camera2");
-    ros::NodeHandle nh_pano("panoramic");
+    ros::NodeHandle nh_pano("panoramic_8bits");
     GetParameters(nh);
     ros::Rate r(frame_rate);
 
     image_transport::ImageTransport it_cam1(nh_cam1);
     image_transport::ImageTransport it_cam2(nh_cam2);
     image_transport::ImageTransport it_pano(nh_pano);
-    out_image_panoramic_pub = it_pano.advertise("image", 10);
+    out_image_panoramic_RGB8_pub = it_pano.advertise("image", 10);
     out_image_camera1_pub = it_cam1.advertiseCamera("image", 10);
     metadata_pub = nh.advertise<norlab_basler_camera_driver::metadata_msg>("metadata", 10);
     out_image_camera2_pub = it_cam2.advertiseCamera("image", 10);
@@ -340,7 +356,5 @@ int main(int argc, char **argv)
     }
 
     ROS_INFO("Terminate Stereo Bracketing Node");
-    // (*cameras)[camera1_index].SequencerMode.SetValue(Basler_UniversalCameraParams::SequencerMode_Off);
-    // (*cameras)[camera1_index].SequencerConfigurationMode.SetValue(Basler_UniversalCameraParams::SequencerConfigurationMode_Off);
     return EXIT_SUCCESS;
 }

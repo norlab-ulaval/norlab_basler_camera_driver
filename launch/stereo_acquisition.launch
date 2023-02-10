@@ -3,9 +3,10 @@
     <group ns="stereo">
 		<arg name="node_name" default="norlab_basler_camera_driver_node" />
 		<arg name="startup_user_set" default="UserSet1" />
-		<arg name="image_encoding" default="bayer_rggb8" />
-		<arg name="enable_bracketing" default="false" />
-		<arg name="frame_rate" default="15" />
+		<arg name="image_encoding" default="bayer_rggb12" /> <!-- Not use for now. Always 12bits -->
+		<arg name="enable_bracketing" default="true" />
+		<arg name="enable_panoramic" default="true" />
+		<arg name="frame_rate" default="10" />
 		<arg name="camera1_calibration_url" default="package://norlab_basler_camera_driver/config/camera1_calibration_file.yaml" />
 		<arg name="camera2_calibration_url" default="package://norlab_basler_camera_driver/config/camera2_calibration_file.yaml" />
 
@@ -19,6 +20,7 @@
         	<param name="startup_user_set" value="$(arg startup_user_set)"/>
 			<param name="image_encoding" value="$(arg image_encoding)"/>
 			<param name="enable_bracketing" value="$(arg enable_bracketing)"/>
+			<param name="enable_panoramic" value="$(arg enable_panoramic)"/>
 			<param name="frame_rate" value="$(arg frame_rate)"/>
 			<param name="camera1_calibration_url" value="$(arg camera1_calibration_url)"/>
 			<param name="camera2_calibration_url" value="$(arg camera2_calibration_url)"/>
