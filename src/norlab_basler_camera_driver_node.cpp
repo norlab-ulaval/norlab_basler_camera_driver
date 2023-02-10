@@ -41,24 +41,15 @@ std::vector<float> exposures;
 int idxExposures = 0;
 
 
-// Example handler for camera events.
 class CEventHandler : public CBaslerUniversalCameraEventHandler, public CImageEventHandler
 {
 public:
     virtual void OnImageGrabbed( CInstantCamera& /*camera*/, const CGrabResultPtr& /*ptrGrabResult*/ )
     {
         (*cameras)[camera1_index].AcquisitionStart.Execute();
-        (*cameras)[camera1_index].SoftwareSignalPulse.Execute();
-        // if (enable_bracketing)
-        // {
-        //     (*cameras)[camera1_index].ExposureTime.SetValue(exposures[idxExposures]);
-        //     (*cameras)[camera2_index].ExposureTime.SetValue(exposures[idxExposures]);
-        //     idxExposures = (idxExposures + 1) % exposures.size();
-        // }
     }
 };
 
-// Can also activate SequencerSetActive in chunk information to keep track for each image
 void SetSequenceExposure(CBaslerUniversalInstantCamera& camera)
 {
     camera.SequencerMode.SetValue(Basler_UniversalCameraParams::SequencerMode_Off);
@@ -106,8 +97,6 @@ void EnableMetadata(CBaslerUniversalInstantCamera& camera)
     camera.ChunkEnable.SetValue(true);
     camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_PayloadCRC16);
     camera.ChunkEnable.SetValue(true);
-    // camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_SequencerSetActive);
-    // camera.ChunkEnable.SetValue(true);
 }
 
 void InitializeExposureTimeAuto()
@@ -207,7 +196,7 @@ void SetupPTP()
 
 void StartGrabbing()
 {
-    cameras->StartGrabbing(GrabStrategy_LatestImageOnly); //GrabStrategy_LatestImageOnly
+    cameras->StartGrabbing(GrabStrategy_LatestImageOnly);
     (*cameras)[camera1_index].AcquisitionStart.Execute();
 }
 
@@ -229,7 +218,7 @@ void PublishCamData(Mat& image, sensor_msgs::CameraInfo camera_info, string fram
     cv_bridge::CvImage out_image_msg;
     out_image_msg.header.stamp = time;
     out_image_msg.header.frame_id = frame_id;
-    out_image_msg.encoding = sensor_msgs::image_encodings::BAYER_RGGB16; //TYPE_16UC1
+    out_image_msg.encoding = sensor_msgs::image_encodings::BAYER_RGGB16;
     out_image_msg.image = image;
     sensor_msgs::CameraInfoPtr ci(new sensor_msgs::CameraInfo(camera_info));
     ci->header.frame_id = out_image_msg.header.frame_id;
@@ -258,15 +247,13 @@ void GrabLoop()
     {
         Mat cv_image1_bayerRG16(camera1_ptrGrabResult->GetHeight(), camera1_ptrGrabResult->GetWidth(), CV_16UC1, (uint16_t *) camera1_ptrGrabResult->GetBuffer());
         Mat cv_image2_bayerRG16(camera2_ptrGrabResult->GetHeight(), camera2_ptrGrabResult->GetWidth(), CV_16UC1, (uint16_t *) camera2_ptrGrabResult->GetBuffer());
-        // DisplayDataOnImage(image1, camera1_ptrGrabResult);
-        // DisplayDataOnImage(image2, camera2_ptrGrabResult);
 
         ros::Time timestamp_ros = ros::Time::now();
         PublishCamData(cv_image1_bayerRG16, c1info_->getCameraInfo(), "camera1_link", out_image_camera1_pub, timestamp_ros);
         PublishCamData(cv_image2_bayerRG16, c2info_->getCameraInfo(), "camera2_link", out_image_camera2_pub, timestamp_ros);
         PublishCamMetadata(camera1_ptrGrabResult, metadata_pub, timestamp_ros);
 
-        // Publish panoramic_8bits
+        // Publish panoramic 8bits images
         if (enable_panoramic)
         {
             Mat cv_image1_RGB16(cv_image1_bayerRG16.cols, cv_image1_bayerRG16.rows, CV_16UC3);
@@ -290,7 +277,7 @@ void GrabLoop()
             cv_bridge::CvImage out_panoramic_RGB8_msg;
             out_panoramic_RGB8_msg.header.stamp = timestamp_ros;
             out_panoramic_RGB8_msg.header.frame_id = "panoramic_link";
-            out_panoramic_RGB8_msg.encoding = sensor_msgs::image_encodings::TYPE_8UC3; //TYPE_16UC1
+            out_panoramic_RGB8_msg.encoding = sensor_msgs::image_encodings::TYPE_8UC3;
             out_panoramic_RGB8_msg.image = cv_panoramic_RGB8;
             out_image_panoramic_RGB8_pub.publish(out_panoramic_RGB8_msg.toImageMsg());
         }
@@ -306,7 +293,7 @@ void GrabLoop()
 
 void GetParameters(ros::NodeHandle handler)
 {
-    handler.getParam("/stereo/norlab_basler_camera_driver_node/startup_user_set", parameters["startup_user_set"]); // Not Use for now
+    handler.getParam("/stereo/norlab_basler_camera_driver_node/startup_user_set", parameters["startup_user_set"]);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/image_encoding", parameters["image_encoding"]);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/camera1_calibration_url", parameters["camera1_calibration_url"]);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/camera2_calibration_url", parameters["camera2_calibration_url"]);
