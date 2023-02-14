@@ -47,8 +47,25 @@ public:
     virtual void OnImageGrabbed( CInstantCamera& /*camera*/, const CGrabResultPtr& /*ptrGrabResult*/ )
     {
         (*cameras)[camera1_index].AcquisitionStart.Execute();
+        (*cameras)[camera1_index].SoftwareSignalPulse.Execute();
     }
 };
+
+void EnableMetadata(CBaslerUniversalInstantCamera& camera)
+{
+    if (!camera.ChunkModeActive.TrySetValue(true))
+    {
+        ROS_WARN("The camera does not support chunk features");
+    }
+    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_FrameID);
+    camera.ChunkEnable.SetValue(true);
+    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_Timestamp);
+    camera.ChunkEnable.SetValue(true);
+    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_ExposureTime);
+    camera.ChunkEnable.SetValue(true);
+    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_PayloadCRC16);
+    camera.ChunkEnable.SetValue(true);
+}
 
 void SetSequenceExposure(CBaslerUniversalInstantCamera& camera)
 {
@@ -60,7 +77,15 @@ void SetSequenceExposure(CBaslerUniversalInstantCamera& camera)
         camera.SequencerSetSelector.SetValue(i);
         camera.SequencerSetLoad.Execute();
         camera.ExposureTime.SetValue(exposures[i]);
-        camera.PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);
+        camera.Gain.SetValue(1.0);
+        if (parameters["image_encoding"] == "bayer_rggb12")
+        {
+            camera.PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);
+        }
+        else if (parameters["image_encoding"] == "bayer_rggb8")
+        {
+            camera.PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG8);
+        }
         camera.SequencerSetStart.SetValue(0);
         camera.SequencerPathSelector.SetValue(0);
         camera.SequencerSetNext.SetValue((i+1)%exposures.size());
@@ -80,32 +105,32 @@ void SetStartupUserSet(CBaslerUniversalInstantCamera& camera)
         camera.SequencerConfigurationMode.SetValue(Basler_UniversalCameraParams::SequencerConfigurationMode_Off);
         camera.UserSetSelector.SetValue(Basler_UniversalCameraParams::UserSetSelector_UserSet1);
         camera.UserSetLoad.Execute();
+        if (parameters["image_encoding"] == "bayer_rggb12")
+        {
+            camera.PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);
+        }
+        else if (parameters["image_encoding"] == "bayer_rggb8")
+        {
+            camera.PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG8);
+        }
     }
-}
-
-void EnableMetadata(CBaslerUniversalInstantCamera& camera)
-{
-    if (!camera.ChunkModeActive.TrySetValue(true))
-    {
-        ROS_WARN("The camera does not support chunk features");
-    }
-    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_FrameID);
-    camera.ChunkEnable.SetValue(true);
-    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_Timestamp);
-    camera.ChunkEnable.SetValue(true);
-    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_ExposureTime);
-    camera.ChunkEnable.SetValue(true);
-    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_PayloadCRC16);
-    camera.ChunkEnable.SetValue(true);
 }
 
 void InitializeExposureTimeAuto()
 {
     ROS_WARN("No bracketing. Using auto exposure time. Might decrease the frame rate.");
     (*cameras)[camera1_index].ExposureAuto.SetValue(Basler_UniversalCameraParams::ExposureAuto_Continuous);
-    (*cameras)[camera1_index].PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);        
     (*cameras)[camera2_index].ExposureAuto.SetValue(Basler_UniversalCameraParams::ExposureAuto_Continuous);
-    (*cameras)[camera2_index].PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);
+    if (parameters["image_encoding"] == "bayer_rggb12")
+    {
+        (*cameras)[camera1_index].PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);        
+        (*cameras)[camera2_index].PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);
+    }
+    else if (parameters["image_encoding"] == "bayer_rggb8")
+    {
+        (*cameras)[camera1_index].PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG8);        
+        (*cameras)[camera2_index].PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG8);
+    }
 }
 
 void CreateAndOpenPylonDevice(CTlFactory& tlFactory, CDeviceInfo device, CBaslerUniversalInstantCamera& camera, size_t i)
@@ -157,7 +182,7 @@ bool InitCameras()
     else
     {
         InitializeExposureTimeAuto();
-    }
+    }  
     return true;
 }
 
@@ -218,7 +243,14 @@ void PublishCamData(Mat& image, sensor_msgs::CameraInfo camera_info, string fram
     cv_bridge::CvImage out_image_msg;
     out_image_msg.header.stamp = time;
     out_image_msg.header.frame_id = frame_id;
-    out_image_msg.encoding = sensor_msgs::image_encodings::BAYER_RGGB16;
+    if (parameters["image_encoding"] == "bayer_rggb12")
+    {
+        out_image_msg.encoding = sensor_msgs::image_encodings::BAYER_RGGB16;
+    }
+    else if (parameters["image_encoding"] == "bayer_rggb8")
+    {
+        out_image_msg.encoding = sensor_msgs::image_encodings::BAYER_RGGB8;
+    }
     out_image_msg.image = image;
     sensor_msgs::CameraInfoPtr ci(new sensor_msgs::CameraInfo(camera_info));
     ci->header.frame_id = out_image_msg.header.frame_id;
@@ -245,26 +277,36 @@ void GrabLoop()
 
     if (camera1_ptrGrabResult->GrabSucceeded() && camera2_ptrGrabResult->GrabSucceeded())
     {
-        Mat cv_image1_bayerRG16(camera1_ptrGrabResult->GetHeight(), camera1_ptrGrabResult->GetWidth(), CV_16UC1, (uint16_t *) camera1_ptrGrabResult->GetBuffer());
-        Mat cv_image2_bayerRG16(camera2_ptrGrabResult->GetHeight(), camera2_ptrGrabResult->GetWidth(), CV_16UC1, (uint16_t *) camera2_ptrGrabResult->GetBuffer());
-
+        Mat cv_image1_bayerRG;
+        Mat cv_image2_bayerRG;
         ros::Time timestamp_ros = ros::Time::now();
-        PublishCamData(cv_image1_bayerRG16, c1info_->getCameraInfo(), "camera1_link", out_image_camera1_pub, timestamp_ros);
-        PublishCamData(cv_image2_bayerRG16, c2info_->getCameraInfo(), "camera2_link", out_image_camera2_pub, timestamp_ros);
+        if (parameters["image_encoding"] == "bayer_rggb12")
+        {
+            cv_image1_bayerRG = Mat(camera1_ptrGrabResult->GetHeight(), camera1_ptrGrabResult->GetWidth(), CV_16UC1, (uint16_t *) camera1_ptrGrabResult->GetBuffer());
+            cv_image2_bayerRG = Mat(camera2_ptrGrabResult->GetHeight(), camera2_ptrGrabResult->GetWidth(), CV_16UC1, (uint16_t *) camera2_ptrGrabResult->GetBuffer());
+        }
+        else if (parameters["image_encoding"] == "bayer_rggb8")
+        {
+            cv_image1_bayerRG = Mat(camera1_ptrGrabResult->GetHeight(), camera1_ptrGrabResult->GetWidth(), CV_8UC1, (uint8_t *) camera1_ptrGrabResult->GetBuffer());
+            cv_image2_bayerRG = Mat(camera2_ptrGrabResult->GetHeight(), camera2_ptrGrabResult->GetWidth(), CV_8UC1, (uint8_t *) camera2_ptrGrabResult->GetBuffer());
+        }
+
+        PublishCamData(cv_image1_bayerRG, c1info_->getCameraInfo(), "camera1_link", out_image_camera1_pub, timestamp_ros);
+        PublishCamData(cv_image2_bayerRG, c2info_->getCameraInfo(), "camera2_link", out_image_camera2_pub, timestamp_ros);
         PublishCamMetadata(camera1_ptrGrabResult, metadata_pub, timestamp_ros);
 
         // Publish panoramic 8bits images
-        if (enable_panoramic)
+        if (enable_panoramic && parameters["image_encoding"] == "bayer_rggb12")
         {
-            Mat cv_image1_RGB16(cv_image1_bayerRG16.cols, cv_image1_bayerRG16.rows, CV_16UC3);
-            cvtColor(cv_image1_bayerRG16, cv_image1_RGB16, COLOR_BayerRG2RGB);
+            Mat cv_image1_RGB16(cv_image1_bayerRG.cols, cv_image1_bayerRG.rows, CV_16UC3);
+            cvtColor(cv_image1_bayerRG, cv_image1_RGB16, COLOR_BayerRG2RGB);
             Mat cv_image1_RGB8;
-            normalize(cv_image1_RGB16, cv_image1_RGB8, 0, 255, NORM_MINMAX, CV_8UC3);
+            cv_image1_RGB16.convertTo(cv_image1_RGB8, CV_8UC3, 1/16.0);
 
-            Mat cv_image2_RGB16(cv_image2_bayerRG16.cols, cv_image2_bayerRG16.rows, CV_16UC3);
-            cvtColor(cv_image2_bayerRG16, cv_image2_RGB16, COLOR_BayerRG2RGB);
+            Mat cv_image2_RGB16(cv_image2_bayerRG.cols, cv_image2_bayerRG.rows, CV_16UC3);
+            cvtColor(cv_image2_bayerRG, cv_image2_RGB16, COLOR_BayerRG2RGB);
             Mat cv_image2_RGB8;
-            normalize(cv_image2_RGB16, cv_image2_RGB8, 0, 255, NORM_MINMAX, CV_8UC3);
+            cv_image2_RGB16.convertTo(cv_image2_RGB8, CV_8UC3, 1/16.0);
             Mat cv_panoramic_RGB8;
             try
             {
