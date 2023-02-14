@@ -3,7 +3,7 @@
     <group ns="stereo">
 		<arg name="node_name" default="norlab_basler_camera_driver_node" />
 		<arg name="startup_user_set" default="UserSet1" />
-		<arg name="image_encoding" default="bayer_rggb12" /> <!-- Not use for now. Always 12bits -->
+		<arg name="image_encoding" default="bayer_rggb12" />
 		<arg name="enable_bracketing" default="true" />
 		<arg name="enable_panoramic" default="true" />
 		<arg name="frame_rate" default="10" />
@@ -29,8 +29,8 @@
     </group>
 
 	<!-- DEBAYER and RECTIFY-->
-	<arg name="enable_debayer" default="false" />
-	<arg name="enable_rectify" default="false" />
+	<arg name="enable_debayer" default="true" />
+	<arg name="enable_rectify" default="true" />
 
 	<!-- CAMERA 1 -->
 	<node if="$(arg enable_debayer)" name="stereo_camera1_manager" pkg="nodelet" type="nodelet" args="manager" output="screen" ns="stereo">

@@ -4,23 +4,78 @@ camera_name: Camera_2
 camera_matrix:
   rows: 3
   cols: 3
-  data: [ 1181.66898,     0.     ,   966.46106,
-             0.     ,  1183.96619,   580.64056,
+  data: [ 1178.66475,     0.     ,   951.3775 ,
+             0.     ,  1180.7607 ,   573.30843,
              0.     ,     0.     ,     1.     ]
 distortion_model: plumb_bob
 distortion_coefficients:
   rows: 1
   cols: 5
-  data: [-0.219452, 0.070641, -0.001468, -0.001088, 0.000000]
+  data: [-0.220514, 0.067586, -0.000080, -0.000051, 0.000000]
 rectification_matrix:
   rows: 3
   cols: 3
-  data: [ 0.99984302, -0.01395291,  0.01092038,
-          0.01402449,  0.99988049, -0.00650571,
-         -0.0108283 ,  0.00665784,  0.99991921]
+  data: [ 1.,  0.,  0.,
+          0.,  1.,  0.,
+          0.,  0.,  1.]
 projection_matrix:
   rows: 3
   cols: 4
-  data: [ 1151.68543,     0.     ,   930.31651,     0.     ,
-             0.     ,  1151.68543,   566.25068,     0.     ,
+  data: [ 1008.51068,     0.     ,   948.91476,     0.     ,
+             0.     ,  1111.19946,   569.85353,     0.     ,
              0.     ,     0.     ,     1.     ,     0.     ]
+
+
+# image_width: 1920
+# image_height: 1200
+# camera_name: Camera_2
+# camera_matrix:
+#   rows: 3
+#   cols: 3
+#   data: [1.,     0.,   0.,
+#          0.,     1.,   0.,
+#          0.,     0.,   1. ]
+# distortion_model: plumb_bob
+# distortion_coefficients:
+#   rows: 1
+#   cols: 5
+#   data: [0., 0., 0., 0., 0.]
+# rectification_matrix:
+#   rows: 3
+#   cols: 3
+#   data: [1.,     0.,   0.,
+#          0.,     1.,   0.,
+#          0.,     0.,   1. ]
+# projection_matrix:
+#   rows: 3
+#   cols: 4
+#   data: [1.,     0.,   0.,  0.,
+#          0.,     1.,   0.,  0.,
+#          0.,     0.,   1.,  0. ]
+
+# image_width: 1920
+# image_height: 1200
+# camera_name: Camera_2
+# camera_matrix:
+#   rows: 3
+#   cols: 3
+#   data: [ 1184.66077,     0.     ,   949.41023,
+#              0.     ,  1187.83097,   573.26532,
+#              0.     ,     0.     ,     1.     ]
+# distortion_model: plumb_bob
+# distortion_coefficients:
+#   rows: 1
+#   cols: 5
+#   data: [-0.227230, 0.079085, 0.001013, -0.000068, 0.000000]
+# rectification_matrix:
+#   rows: 3
+#   cols: 3
+#   data: [ 1.,  0.,  0.,
+#           0.,  1.,  0.,
+#           0.,  0.,  1.]
+# projection_matrix:
+#   rows: 3
+#   cols: 4
+#   data: [ 1019.68353,     0.     ,   946.84028,     0.     ,
+#              0.     ,  1117.65247,   571.09714,     0.     ,
+#              0.     ,     0.     ,     1.     ,     0.     ]
