@@ -46,7 +46,7 @@ class CEventHandler : public CBaslerUniversalCameraEventHandler, public CImageEv
 public:
     virtual void OnImageGrabbed( CInstantCamera& /*camera*/, const CGrabResultPtr& /*ptrGrabResult*/ )
     {
-        (*cameras)[camera1_index].AcquisitionStart.Execute();
+        // (*cameras)[camera1_index].AcquisitionStart.Execute();
         (*cameras)[camera1_index].SoftwareSignalPulse.Execute();
     }
 };
@@ -121,6 +121,8 @@ void InitializeExposureTimeAuto()
     ROS_WARN("No bracketing. Using auto exposure time. Might decrease the frame rate.");
     (*cameras)[camera1_index].ExposureAuto.SetValue(Basler_UniversalCameraParams::ExposureAuto_Continuous);
     (*cameras)[camera2_index].ExposureAuto.SetValue(Basler_UniversalCameraParams::ExposureAuto_Continuous);
+    // (*cameras)[camera1_index].ExposureTime.SetValue(16000);
+    // (*cameras)[camera2_index].ExposureTime.SetValue(16000);
     if (parameters["image_encoding"] == "bayer_rggb12")
     {
         (*cameras)[camera1_index].PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);        
@@ -137,8 +139,8 @@ void CreateAndOpenPylonDevice(CTlFactory& tlFactory, CDeviceInfo device, CBasler
 {
     camera.Attach(tlFactory.CreateDevice(device));
     // Print the model name of the camera.
-    cout << "Using device " << camera.GetDeviceInfo().GetUserDefinedName() << endl;
-    cout << "Device Index " << i << endl;
+    cout << "Using device: " << camera.GetDeviceInfo().GetUserDefinedName() << endl;
+    cout << "Device Index: " << i << endl;
 
     if (camera.GetDeviceInfo().GetUserDefinedName() == "Camera_1")
     {
@@ -173,8 +175,8 @@ bool InitCameras()
         EnableMetadata((*cameras)[i]);   
     }
 
-    CAcquireSingleFrameConfiguration sf_config = CAcquireSingleFrameConfiguration();
-    sf_config.ApplyConfiguration((*cameras)[camera1_index].GetNodeMap());
+    // CAcquireSingleFrameConfiguration sf_config = CAcquireSingleFrameConfiguration();
+    // sf_config.ApplyConfiguration((*cameras)[camera1_index].GetNodeMap());
     if (enable_bracketing)
     {
         SetSequenceExposure((*cameras)[camera1_index]);
@@ -182,7 +184,7 @@ bool InitCameras()
     else
     {
         InitializeExposureTimeAuto();
-    }  
+    }
     return true;
 }
 
@@ -222,7 +224,7 @@ void SetupPTP()
 void StartGrabbing()
 {
     cameras->StartGrabbing(GrabStrategy_LatestImageOnly);
-    (*cameras)[camera1_index].AcquisitionStart.Execute();
+    // (*cameras)[camera1_index].AcquisitionStart.Execute();
 }
 
 void DisplayDataOnImage(Mat& image, CBaslerUniversalGrabResultPtr ptrGrabResult)
