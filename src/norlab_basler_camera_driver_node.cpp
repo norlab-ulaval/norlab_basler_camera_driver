@@ -27,7 +27,7 @@ std::unique_ptr<CBaslerUniversalInstantCameraArray> cameras;
 std::map<string, string> parameters;
 bool enable_bracketing;
 bool enable_panoramic;
-int frame_rate;
+float frame_rate;
 image_transport::Publisher out_image_panoramic_RGB8_pub;
 image_transport::CameraPublisher out_image_camera1_pub;
 ros::Publisher metadata_pub;
@@ -46,7 +46,7 @@ class CEventHandler : public CBaslerUniversalCameraEventHandler, public CImageEv
 public:
     virtual void OnImageGrabbed( CInstantCamera& /*camera*/, const CGrabResultPtr& /*ptrGrabResult*/ )
     {
-        // (*cameras)[camera1_index].AcquisitionStart.Execute();
+        //(*cameras)[camera1_index].AcquisitionStart.Execute();
         (*cameras)[camera1_index].SoftwareSignalPulse.Execute();
     }
 };
@@ -152,6 +152,12 @@ void CreateAndOpenPylonDevice(CTlFactory& tlFactory, CDeviceInfo device, CBasler
     camera.Open();
 }
 
+void setAcquisitionFrameRate(CBaslerUniversalInstantCamera& camera)
+{
+    camera.AcquisitionFrameRate.SetValue(frame_rate);
+    camera.AcquisitionFrameRateEnable.SetValue(true);
+}
+
 bool InitCameras()
 {
     PylonInitialize();
@@ -175,8 +181,9 @@ bool InitCameras()
         EnableMetadata((*cameras)[i]);   
     }
 
-    // CAcquireSingleFrameConfiguration sf_config = CAcquireSingleFrameConfiguration();
-    // sf_config.ApplyConfiguration((*cameras)[camera1_index].GetNodeMap());
+    //CAcquireSingleFrameConfiguration sf_config = CAcquireSingleFrameConfiguration();
+    //sf_config.ApplyConfiguration((*cameras)[camera1_index].GetNodeMap());
+    setAcquisitionFrameRate((*cameras)[camera1_index]);
     if (enable_bracketing)
     {
         SetSequenceExposure((*cameras)[camera1_index]);
@@ -224,7 +231,7 @@ void SetupPTP()
 void StartGrabbing()
 {
     cameras->StartGrabbing(GrabStrategy_LatestImageOnly);
-    // (*cameras)[camera1_index].AcquisitionStart.Execute();
+    //(*cameras)[camera1_index].AcquisitionStart.Execute();
 }
 
 void DisplayDataOnImage(Mat& image, CBaslerUniversalGrabResultPtr ptrGrabResult)
