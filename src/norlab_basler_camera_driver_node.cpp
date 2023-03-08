@@ -40,6 +40,9 @@ int camera2_index;
 std::vector<float> exposures;
 int idxExposures = 0;
 
+CBaslerUniversalGrabResultPtr camera1_ptrGrabResult;
+CBaslerUniversalGrabResultPtr camera2_ptrGrabResult;
+
 
 class CEventHandler : public CBaslerUniversalCameraEventHandler, public CImageEventHandler
 {
@@ -47,7 +50,7 @@ public:
     virtual void OnImageGrabbed( CInstantCamera& /*camera*/, const CGrabResultPtr& /*ptrGrabResult*/ )
     {
         //(*cameras)[camera1_index].AcquisitionStart.Execute();
-        (*cameras)[camera1_index].SoftwareSignalPulse.Execute();
+        //(*cameras)[camera1_index].SoftwareSignalPulse.Execute();
     }
 };
 
@@ -63,7 +66,7 @@ void EnableMetadata(CBaslerUniversalInstantCamera& camera)
     camera.ChunkEnable.SetValue(true);
     camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_ExposureTime);
     camera.ChunkEnable.SetValue(true);
-    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_PayloadCRC16);
+    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_SequencerSetActive);
     camera.ChunkEnable.SetValue(true);
 }
 
@@ -89,9 +92,9 @@ void SetSequenceExposure(CBaslerUniversalInstantCamera& camera)
         camera.SequencerSetStart.SetValue(0);
         camera.SequencerPathSelector.SetValue(0);
         camera.SequencerSetNext.SetValue((i+1)%exposures.size());
-        camera.SequencerTriggerSource.SetValue(Basler_UniversalCameraParams::SequencerTriggerSource_SoftwareSignal1);
+        camera.SequencerTriggerSource.SetValue("ExposureStart");
         camera.SequencerSetSave.Execute();
-    }
+    }   
 
     camera.SequencerConfigurationMode.SetValue(Basler_UniversalCameraParams::SequencerConfigurationMode_Off);
     camera.SequencerMode.SetValue(Basler_UniversalCameraParams::SequencerMode_On);
@@ -146,8 +149,8 @@ void CreateAndOpenPylonDevice(CTlFactory& tlFactory, CDeviceInfo device, CBasler
     {
         camera1_index = i;
         camera2_index = (camera1_index + 1) % 2;
-        camera.RegisterImageEventHandler(new CEventHandler(), RegistrationMode_Append, Cleanup_Delete);
-        camera.GrabCameraEvents = true;
+        //camera.RegisterImageEventHandler(new CEventHandler(), RegistrationMode_Append, Cleanup_Delete);
+        //camera.GrabCameraEvents = true;
     }
     camera.Open();
 }
@@ -273,14 +276,14 @@ void PublishCamMetadata(CBaslerUniversalGrabResultPtr image_ptr, ros::Publisher&
     header.stamp = time;
     norlab_basler_camera_driver::metadata_msg msg;
     msg.header = header;
+    msg.imgFrameId = (int32_t)(image_ptr->ChunkFrameID.GetValue());
+    msg.sequencerSetIndex = (int32_t)(image_ptr->ChunkSequencerSetActive.GetValue());
     msg.exposureTime = (float32_t)(image_ptr->ChunkExposureTime.GetValue());
     publisher.publish(msg);
 }
 
 void GrabLoop()
 {
-    CBaslerUniversalGrabResultPtr camera1_ptrGrabResult;
-    CBaslerUniversalGrabResultPtr camera2_ptrGrabResult;
     (*cameras)[camera2_index].RetrieveResult(500, camera2_ptrGrabResult, TimeoutHandling_ThrowException);
     (*cameras)[camera1_index].RetrieveResult(500, camera1_ptrGrabResult, TimeoutHandling_ThrowException);
 
@@ -338,7 +341,8 @@ void GrabLoop()
     }
     else
     {
-        cout << "Error: " << std::hex << camera1_ptrGrabResult->GetErrorCode() << std::dec << " " << camera1_ptrGrabResult->GetErrorDescription() << endl;
+        ROS_INFO_STREAM("Error Camera1: " << std::hex << camera1_ptrGrabResult->GetErrorCode() << std::dec << " " << camera1_ptrGrabResult->GetErrorDescription() << endl);
+        ROS_INFO_STREAM("Error Camera2: " << std::hex << camera2_ptrGrabResult->GetErrorCode() << std::dec << " " << camera2_ptrGrabResult->GetErrorDescription() << endl);
     }
 }
 
@@ -374,7 +378,7 @@ int main(int argc, char **argv)
     ros::NodeHandle nh_pano("panoramic_8bits");
     GetParameters(nh);
     ros::Rate r(frame_rate);
-
+    
     image_transport::ImageTransport it_cam1(nh_cam1);
     image_transport::ImageTransport it_cam2(nh_cam2);
     image_transport::ImageTransport it_pano(nh_pano);
