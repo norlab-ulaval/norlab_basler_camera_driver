@@ -9,6 +9,13 @@ if (NOT ${Pylon_FOUND})
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindPylon.cmake")
 endif()
 
+set(OpenCV_DIR /usr/include/opencv4/)
+message(STATUS "${OpenCV_DIR}")
+
+find_package(
+  OpenCV REQUIRED
+)
+
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -17,8 +24,8 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   sensor_msgs
   std_msgs
-  OpenCV
   image_transport
+  OpenCV
   cv_bridge
   camera_info_manager
   message_generation
@@ -129,6 +136,7 @@ catkin_package(
 include_directories(
 # include
   ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${OpenCV_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
   ${Pylon_INCLUDE_DIRS}
 )

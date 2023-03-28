@@ -66,8 +66,8 @@ void EnableMetadata(CBaslerUniversalInstantCamera& camera)
     camera.ChunkEnable.SetValue(true);
     camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_ExposureTime);
     camera.ChunkEnable.SetValue(true);
-    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_SequencerSetActive);
-    camera.ChunkEnable.SetValue(true);
+    // camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_SequencerSetActive);
+    // camera.ChunkEnable.SetValue(true);
 }
 
 void SetSequenceExposure(CBaslerUniversalInstantCamera& camera)
@@ -116,6 +116,11 @@ void SetStartupUserSet(CBaslerUniversalInstantCamera& camera)
         {
             camera.PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG8);
         }
+    }
+    else if (parameters["startup_user_set"] == "UserSet2")
+    {
+        camera.UserSetSelector.SetValue(Basler_UniversalCameraParams::UserSetSelector_UserSet2);
+        camera.UserSetLoad.Execute();
     }
 }
 
@@ -186,15 +191,15 @@ bool InitCameras()
 
     //CAcquireSingleFrameConfiguration sf_config = CAcquireSingleFrameConfiguration();
     //sf_config.ApplyConfiguration((*cameras)[camera1_index].GetNodeMap());
-    setAcquisitionFrameRate((*cameras)[camera1_index]);
-    if (enable_bracketing)
-    {
-        SetSequenceExposure((*cameras)[camera1_index]);
-    }
-    else
-    {
-        InitializeExposureTimeAuto();
-    }
+    // setAcquisitionFrameRate((*cameras)[camera1_index]);
+    // if (enable_bracketing)
+    // {
+    //     SetSequenceExposure((*cameras)[camera1_index]);
+    // }
+    // else
+    // {
+    //     InitializeExposureTimeAuto();
+    // }
     return true;
 }
 
@@ -237,18 +242,18 @@ void StartGrabbing()
     //(*cameras)[camera1_index].AcquisitionStart.Execute();
 }
 
-void DisplayDataOnImage(Mat& image, CBaslerUniversalGrabResultPtr ptrGrabResult)
-{
-    Point org_timestamp(30,100);
-    Point org_frameID(30,200);
-    Point org_exposuretime(30,300);
-    cv::putText(image, std::to_string(ptrGrabResult->ChunkTimestamp.GetValue()), org_timestamp, FONT_HERSHEY_SCRIPT_COMPLEX, 2.1,
-                    Scalar(0, 0, 255), 2, LINE_AA);
-    cv::putText(image, std::to_string(ptrGrabResult->ChunkFrameID.GetValue()), org_frameID, FONT_HERSHEY_SCRIPT_COMPLEX, 2.1,
-                    Scalar(0, 0, 255), 2, LINE_AA);
-    cv::putText(image, std::to_string(ptrGrabResult->ChunkExposureTime.GetValue()), org_exposuretime, FONT_HERSHEY_SCRIPT_COMPLEX, 2.1,
-                    Scalar(0, 0, 255), 2, LINE_AA);
-}
+// void DisplayDataOnImage(Mat& image, CBaslerUniversalGrabResultPtr ptrGrabResult)
+// {
+//     Point org_timestamp(30,100);
+//     Point org_frameID(30,200);
+//     Point org_exposuretime(30,300);
+//     cv::putText(image, std::to_string(ptrGrabResult->ChunkTimestamp.GetValue()), org_timestamp, FONT_HERSHEY_SCRIPT_COMPLEX, 2.1,
+//                     Scalar(0, 0, 255), 2, LINE_AA);
+//     cv::putText(image, std::to_string(ptrGrabResult->ChunkFrameID.GetValue()), org_frameID, FONT_HERSHEY_SCRIPT_COMPLEX, 2.1,
+//                     Scalar(0, 0, 255), 2, LINE_AA);
+//     cv::putText(image, std::to_string(ptrGrabResult->ChunkExposureTime.GetValue()), org_exposuretime, FONT_HERSHEY_SCRIPT_COMPLEX, 2.1,
+//                     Scalar(0, 0, 255), 2, LINE_AA);
+// }
 
 void PublishCamData(Mat& image, sensor_msgs::CameraInfo camera_info, string frame_id, image_transport::CameraPublisher& publisher, ros::Time time)
 {
@@ -277,7 +282,7 @@ void PublishCamMetadata(CBaslerUniversalGrabResultPtr image_ptr, ros::Publisher&
     norlab_basler_camera_driver::metadata_msg msg;
     msg.header = header;
     msg.imgFrameId = (int32_t)(image_ptr->ChunkFrameID.GetValue());
-    msg.sequencerSetIndex = (int32_t)(image_ptr->ChunkSequencerSetActive.GetValue());
+    // msg.sequencerSetIndex = (int32_t)(image_ptr->ChunkSequencerSetActive.GetValue());
     msg.exposureTime = (float32_t)(image_ptr->ChunkExposureTime.GetValue());
     publisher.publish(msg);
 }
@@ -352,7 +357,7 @@ void GetParameters(ros::NodeHandle handler)
     handler.getParam("/stereo/norlab_basler_camera_driver_node/image_encoding", parameters["image_encoding"]);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/camera1_calibration_url", parameters["camera1_calibration_url"]);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/camera2_calibration_url", parameters["camera2_calibration_url"]);
-    handler.getParam("/stereo/norlab_basler_camera_driver_node/frame_rate", frame_rate);
+    handler.getParam("/stm32_node/frame_rate", frame_rate);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/enable_bracketing", enable_bracketing);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/enable_panoramic", enable_panoramic);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/bracketing_values", exposures);
