@@ -29,7 +29,7 @@ CPylonImage camera2_targetImage;
 cv_bridge::CvImage out_image_msg_1;
 cv_bridge::CvImage out_image_msg_2;
 
-void metadata_callback(norlab_basler_camera_driver::metadata_msg msg)
+void metadata_callback(const norlab_basler_camera_driver::metadata_msg& msg)
 {
     ros::Time time_now = ros::Time::now();
     camera1_decompressor = CImageDecompressor(msg.descriptor_cam1.data(), msg.descriptor_size_cam1);
