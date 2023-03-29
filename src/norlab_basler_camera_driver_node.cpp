@@ -5,10 +5,12 @@
 #include <boost/thread.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui.hpp>
 #include <chrono>
 
 #include <ros/ros.h>
 #include "std_msgs/String.h"
+#include <std_msgs/UInt8.h>
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
 #include <camera_info_manager/camera_info_manager.h>
@@ -18,6 +20,7 @@
 #include <pylon/BaslerUniversalInstantCamera.h>
 #include <pylon/BaslerUniversalInstantCameraArray.h>
 #include <pylon/AcquireSingleFrameConfiguration.h>
+#include <pylon/ImageDecompressor.h>
 
 using namespace std;
 using namespace Pylon;
@@ -39,6 +42,13 @@ int camera1_index;
 int camera2_index;
 std::vector<float> exposures;
 int idxExposures = 0;
+
+norlab_basler_camera_driver::metadata_msg msg;
+CImageDecompressor camera1_decompressor;
+CImageDecompressor camera2_decompressor;
+CompressionInfo_t cam_info;
+CPylonImage camera1_targetImage;
+CPylonImage camera2_targetImage;
 
 CBaslerUniversalGrabResultPtr camera1_ptrGrabResult;
 CBaslerUniversalGrabResultPtr camera2_ptrGrabResult;
@@ -121,6 +131,14 @@ void SetStartupUserSet(CBaslerUniversalInstantCamera& camera)
     {
         camera.UserSetSelector.SetValue(Basler_UniversalCameraParams::UserSetSelector_UserSet2);
         camera.UserSetLoad.Execute();
+        if (parameters["image_encoding"] == "bayer_rggb12")
+        {
+            camera.PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);
+        }
+        else if (parameters["image_encoding"] == "bayer_rggb8")
+        {
+            camera.PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG8);
+        }
     }
 }
 
@@ -189,6 +207,9 @@ bool InitCameras()
         EnableMetadata((*cameras)[i]);   
     }
 
+    camera1_decompressor = CImageDecompressor((*cameras)[camera1_index].GetNodeMap());
+    camera2_decompressor = CImageDecompressor((*cameras)[camera2_index].GetNodeMap());
+
     //CAcquireSingleFrameConfiguration sf_config = CAcquireSingleFrameConfiguration();
     //sf_config.ApplyConfiguration((*cameras)[camera1_index].GetNodeMap());
     // setAcquisitionFrameRate((*cameras)[camera1_index]);
@@ -203,57 +224,10 @@ bool InitCameras()
     return true;
 }
 
-void SetupPTP()
-{
-    // ** Configure PTP **
-    // Set Priority 1 to 128
-    (*cameras)[camera1_index].BslPtpPriority1.SetValue(1);
-    (*cameras)[camera2_index].BslPtpPriority1.SetValue(128);
-    // Enable end-to-end delay measurement
-    (*cameras)[camera1_index].BslPtpProfile.SetValue(Basler_UniversalCameraParams::BslPtpProfile_DelayRequestResponseDefaultProfile);
-    (*cameras)[camera2_index].BslPtpProfile.SetValue(Basler_UniversalCameraParams::BslPtpProfile_DelayRequestResponseDefaultProfile);
-    // Set the network mode to unicast
-    (*cameras)[camera1_index].BslPtpNetworkMode.SetValue(Basler_UniversalCameraParams::BslPtpNetworkMode_Unicast);
-    (*cameras)[camera2_index].BslPtpNetworkMode.SetValue(Basler_UniversalCameraParams::BslPtpNetworkMode_Unicast);
-    // Set the IP address of the first unicast device to 192.168.10.12
-    // (0xC0 = 192, 0xA8 = 168, 0x0A = 10, 0x0C = 12)
-    (*cameras)[camera1_index].BslPtpUcPortAddrIndex.SetValue(0);
-    (*cameras)[camera1_index].BslPtpUcPortAddr.SetValue((0xC0A80303));
-    (*cameras)[camera2_index].BslPtpUcPortAddrIndex.SetValue(1);
-    (*cameras)[camera2_index].BslPtpUcPortAddr.SetValue((0xC0A80304));
-    // Enable PTP Management Protocol
-    (*cameras)[camera1_index].BslPtpManagementEnable.SetValue(true);
-    (*cameras)[camera2_index].BslPtpManagementEnable.SetValue(true);
-    // Disable two-step operation
-    (*cameras)[camera1_index].BslPtpTwoStep.SetValue(false);
-    (*cameras)[camera2_index].BslPtpTwoStep.SetValue(false);
-    // ** Enable PTP on the current device **
-    (*cameras)[camera1_index].PtpEnable.SetValue(true);
-    (*cameras)[camera2_index].PtpEnable.SetValue(true);
-    // To check the status of the PTP clock synchronization,
-    // implement your own check method here.
-    // For guidelines, see "Checking the Status of
-    // the PTP Clock Synchronization" in this topic.
-}
-
 void StartGrabbing()
 {
     cameras->StartGrabbing(GrabStrategy_LatestImageOnly);
-    //(*cameras)[camera1_index].AcquisitionStart.Execute();
 }
-
-// void DisplayDataOnImage(Mat& image, CBaslerUniversalGrabResultPtr ptrGrabResult)
-// {
-//     Point org_timestamp(30,100);
-//     Point org_frameID(30,200);
-//     Point org_exposuretime(30,300);
-//     cv::putText(image, std::to_string(ptrGrabResult->ChunkTimestamp.GetValue()), org_timestamp, FONT_HERSHEY_SCRIPT_COMPLEX, 2.1,
-//                     Scalar(0, 0, 255), 2, LINE_AA);
-//     cv::putText(image, std::to_string(ptrGrabResult->ChunkFrameID.GetValue()), org_frameID, FONT_HERSHEY_SCRIPT_COMPLEX, 2.1,
-//                     Scalar(0, 0, 255), 2, LINE_AA);
-//     cv::putText(image, std::to_string(ptrGrabResult->ChunkExposureTime.GetValue()), org_exposuretime, FONT_HERSHEY_SCRIPT_COMPLEX, 2.1,
-//                     Scalar(0, 0, 255), 2, LINE_AA);
-// }
 
 void PublishCamData(Mat& image, sensor_msgs::CameraInfo camera_info, string frame_id, image_transport::CameraPublisher& publisher, ros::Time time)
 {
@@ -275,20 +249,34 @@ void PublishCamData(Mat& image, sensor_msgs::CameraInfo camera_info, string fram
     publisher.publish(out_image_msg.toImageMsg(), ci);
 }
 
-void PublishCamMetadata(CBaslerUniversalGrabResultPtr image_ptr, ros::Publisher& publisher, ros::Time time)
+void PublishCamMetadata(CBaslerUniversalGrabResultPtr image1_ptr, CBaslerUniversalGrabResultPtr image2_ptr, ros::Publisher& publisher, ros::Time time)
 {
-    std_msgs::Header header;
-    header.stamp = time;
-    norlab_basler_camera_driver::metadata_msg msg;
-    msg.header = header;
-    msg.imgFrameId = (int32_t)(image_ptr->ChunkFrameID.GetValue());
-    // msg.sequencerSetIndex = (int32_t)(image_ptr->ChunkSequencerSetActive.GetValue());
-    msg.exposureTime = (float32_t)(image_ptr->ChunkExposureTime.GetValue());
+    if(msg.size_1 == 0)
+    {
+        camera1_decompressor.GetCompressionDescriptor(NULL, &msg.size_1);
+        camera2_decompressor.GetCompressionDescriptor(NULL, &msg.size_2);
+        msg.descriptor_1.resize(msg.size_1);
+        msg.descriptor_2.resize(msg.size_2);
+    }
+    msg.header.stamp = time;
+    msg.imgFrameId = (int32_t)(image1_ptr->ChunkFrameID.GetValue());
+    msg.exposureTime = (float32_t)(image1_ptr->ChunkExposureTime.GetValue());
+    camera1_decompressor.GetCompressionDescriptor(msg.descriptor_1.data(), &msg.size_1);
+    msg.imgSize_1 = image1_ptr->GetPayloadSize();
+    msg.imgBuffer_1.resize(msg.imgSize_1);
+    memcpy(msg.imgBuffer_1.data(), image1_ptr->GetBuffer(), msg.imgSize_1);
+
+    camera2_decompressor.GetCompressionDescriptor(msg.descriptor_2.data(), &msg.size_2);
+    msg.imgSize_2 = image2_ptr->GetPayloadSize();
+    msg.imgBuffer_2.resize(msg.imgSize_2);
+    memcpy(msg.imgBuffer_2.data(), image2_ptr->GetBuffer(), msg.imgSize_2);
+
     publisher.publish(msg);
 }
 
 void GrabLoop()
 {
+    // auto time_0 = std::chrono::system_clock::now();
     (*cameras)[camera2_index].RetrieveResult(500, camera2_ptrGrabResult, TimeoutHandling_ThrowException);
     (*cameras)[camera1_index].RetrieveResult(500, camera1_ptrGrabResult, TimeoutHandling_ThrowException);
 
@@ -297,20 +285,21 @@ void GrabLoop()
         Mat cv_image1_bayerRG;
         Mat cv_image2_bayerRG;
         ros::Time timestamp_ros = ros::Time::now();
+
         if (parameters["image_encoding"] == "bayer_rggb12")
         {
-            cv_image1_bayerRG = Mat(camera1_ptrGrabResult->GetHeight(), camera1_ptrGrabResult->GetWidth(), CV_16UC1, (uint16_t *) camera1_ptrGrabResult->GetBuffer());
-            cv_image2_bayerRG = Mat(camera2_ptrGrabResult->GetHeight(), camera2_ptrGrabResult->GetWidth(), CV_16UC1, (uint16_t *) camera2_ptrGrabResult->GetBuffer());
+            cv_image1_bayerRG = Mat(camera1_targetImage.GetHeight(), camera1_targetImage.GetWidth(), CV_16UC1, (uint16_t *) camera1_targetImage.GetBuffer());
+            cv_image2_bayerRG = Mat(camera2_targetImage.GetHeight(), camera2_targetImage.GetWidth(), CV_16UC1, (uint16_t *) camera2_targetImage.GetBuffer());
         }
         else if (parameters["image_encoding"] == "bayer_rggb8")
         {
-            cv_image1_bayerRG = Mat(camera1_ptrGrabResult->GetHeight(), camera1_ptrGrabResult->GetWidth(), CV_8UC1, (uint8_t *) camera1_ptrGrabResult->GetBuffer());
-            cv_image2_bayerRG = Mat(camera2_ptrGrabResult->GetHeight(), camera2_ptrGrabResult->GetWidth(), CV_8UC1, (uint8_t *) camera2_ptrGrabResult->GetBuffer());
+            cv_image1_bayerRG = Mat(camera1_targetImage.GetHeight(), camera1_targetImage.GetWidth(), CV_8UC1, (uint8_t *) camera1_targetImage.GetBuffer());
+            cv_image2_bayerRG = Mat(camera2_targetImage.GetHeight(), camera2_targetImage.GetWidth(), CV_8UC1, (uint8_t *) camera2_targetImage.GetBuffer());
         }
 
         PublishCamData(cv_image1_bayerRG, c1info_->getCameraInfo(), "camera1_link", out_image_camera1_pub, timestamp_ros);
         PublishCamData(cv_image2_bayerRG, c2info_->getCameraInfo(), "camera2_link", out_image_camera2_pub, timestamp_ros);
-        PublishCamMetadata(camera1_ptrGrabResult, metadata_pub, timestamp_ros);
+        PublishCamMetadata(camera1_ptrGrabResult, camera2_ptrGrabResult, metadata_pub, timestamp_ros);
 
         // Publish panoramic 8bits images
         if (enable_panoramic && parameters["image_encoding"] == "bayer_rggb12")
@@ -349,6 +338,9 @@ void GrabLoop()
         ROS_INFO_STREAM("Error Camera1: " << std::hex << camera1_ptrGrabResult->GetErrorCode() << std::dec << " " << camera1_ptrGrabResult->GetErrorDescription() << endl);
         ROS_INFO_STREAM("Error Camera2: " << std::hex << camera2_ptrGrabResult->GetErrorCode() << std::dec << " " << camera2_ptrGrabResult->GetErrorDescription() << endl);
     }
+    // auto time_4 = std::chrono::system_clock::now();
+    // std::chrono::duration<double> elapsed_seconds_40 = time_4-time_0;
+    // cout << "elapsed time 40: " << elapsed_seconds_40.count() << "s" << endl;
 }
 
 void GetParameters(ros::NodeHandle handler)

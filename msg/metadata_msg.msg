@@ -1,3 +1,11 @@
 std_msgs/Header header
 int32 imgFrameId
 float32 exposureTime
+uint8[] descriptor_1
+uint64 size_1
+uint8[] imgBuffer_1
+uint64 imgSize_1
+uint8[] descriptor_2
+uint64 size_2
+uint8[] imgBuffer_2
+uint64 imgSize_2
