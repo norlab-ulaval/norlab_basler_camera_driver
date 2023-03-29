@@ -61,7 +61,7 @@ int main(int argc, char **argv)
     out_image_msg_2.encoding = sensor_msgs::image_encodings::BAYER_RGGB8;
     
 
-    ros::Subscriber metadata_subscriber = nh.subscribe("/stereo/metadata", 1, metadata_callback);
+    ros::Subscriber metadata_subscriber = nh.subscribe("/stereo/image_metapackets", 1, metadata_callback);
 
     ros::spin();
     ROS_INFO("Image Decompression Node");
