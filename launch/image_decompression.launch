@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<launch>
+
+    <node name="image_decompression" pkg="norlab_basler_camera_driver" type="image_decompression_node" output="screen"/>
+
+	<!-- RESIZE FOR VISUALIZATION -->
+	<arg name="enable_resize" default="true" />
+    <arg name="resize_factor" default="0.25"/>
+
+	<node if="$(arg enable_resize)" name="stereo_camera1_manager" pkg="nodelet" type="nodelet" args="manager" output="screen">
+		<param name="num_worker_threads" value="3" type="int"/>
+	</node>
+	<node if="$(arg enable_resize)" pkg="nodelet" type="nodelet" name="stereo_resize_camera1" args="load image_proc/resize stereo_camera1_manager">
+		<param name="scale_width" value="$(arg resize_factor)"/>
+        <param name="scale_height" value="$(arg resize_factor)"/>
+        <remap from="image" to="/camera1/image_decompression"/>
+		<remap from="camera_info" to="/stereo/camera1/camera_info"/>
+		<remap from="~image" to="/camera1/resized/image_decompression"/>
+		<remap from="camera_info" to="/camera1/resized/image_decompression"/>
+    </node>
+
+    <node if="$(arg enable_resize)" name="stereo_camera2_manager" pkg="nodelet" type="nodelet" args="manager" output="screen">
+		<param name="num_worker_threads" value="3" type="int"/>
+	</node>
+	<node if="$(arg enable_resize)" pkg="nodelet" type="nodelet" name="stereo_resize_camera2" args="load image_proc/resize stereo_camera2_manager">
+		<param name="scale_width" value="$(arg resize_factor)"/>
+        <param name="scale_height" value="$(arg resize_factor)"/>
+        <remap from="image" to="/camera2/image_decompression"/>
+		<remap from="camera_info" to="/stereo/camera2/camera_info"/>
+		<remap from="~image" to="/camera2/resized/image_decompression"/>
+		<remap from="camera_info" to="/camera2/resized/image_decompression"/>
+    </node>
+
+</launch>
