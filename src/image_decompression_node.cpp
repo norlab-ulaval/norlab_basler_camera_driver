@@ -35,9 +35,9 @@ void metadata_callback(const norlab_basler_camera_driver::metadata_msg& msg)
     Mat cv_image1_bayerRG;
     Mat cv_image2_bayerRG;
     ros::Time time_now = ros::Time::now();
-    camera1_decompressor = CImageDecompressor(msg.descriptor_1.data(), msg.size_1);
+    camera1_decompressor = CImageDecompressor(msg.descriptor_cam1.data(), msg.descriptor_size_cam1);
     try{
-        camera1_decompressor.DecompressImage(camera1_targetImage, msg.imgBuffer_1.data(), msg.imgSize_1);
+        camera1_decompressor.DecompressImage(camera1_targetImage, msg.imgBuffer_cam1.data(), msg.imgSize_cam1);
     }
     catch(...){
         cout << "lost an image cam1" << endl;
@@ -51,9 +51,9 @@ void metadata_callback(const norlab_basler_camera_driver::metadata_msg& msg)
     out_image_msg_1.image = cv_image1_RGB8_cam1;
 
 
-    camera2_decompressor = CImageDecompressor(msg.descriptor_2.data(), msg.size_2);
+    camera2_decompressor = CImageDecompressor(msg.descriptor_cam2.data(), msg.descriptor_size_cam2);
     try{
-        camera2_decompressor.DecompressImage(camera2_targetImage, msg.imgBuffer_2.data(), msg.imgSize_2);
+        camera2_decompressor.DecompressImage(camera2_targetImage, msg.imgBuffer_cam2.data(), msg.imgSize_cam2);
     }
     catch(...){
         cout << "lost an image cam2" << endl;
