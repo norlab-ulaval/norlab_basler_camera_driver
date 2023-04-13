@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<launch>
+
+    <node name="bits_converter" pkg="bracketing_analyzing_tools" type="16bits_to_8bits_converter_python2.py" output="screen"/>
+
+	<!-- RESIZE FOR VISUALIZATION -->
+	<arg name="enable_resize" default="true" />
+    <arg name="resize_factor" default="0.25"/>
+
+	<node if="$(arg enable_resize)" name="stereo_camera1_manager" pkg="nodelet" type="nodelet" args="manager" output="screen">
+		<param name="num_worker_threads" value="3" type="int"/>
+	</node>
+
+	<node if="$(arg enable_resize)" pkg="nodelet" type="nodelet" name="stereo_debayer_camera1" args="load image_proc/debayer stereo_camera1_manager">
+		<param name="bayer_pattern" value="rggb"/>
+		<remap from="image_raw" to="/stereo/camera1/image"/>
+		<remap from="camera_info" to="/stereo/camera1/camera_info"/>
+		<remap from="image_color" to="/stereo/camera1/image_debayer_color"/>
+		<remap from="image_mono" to="/stereo/camera1/image_debayer_mono"/>
+	</node>
+
+	<node if="$(arg enable_resize)" pkg="nodelet" type="nodelet" name="stereo_resize_camera1" args="load image_proc/resize stereo_camera1_manager">
+		<param name="scale_width" value="$(arg resize_factor)"/>
+        <param name="scale_height" value="$(arg resize_factor)"/>
+        <remap from="image" to="/stereo/camera1/image_debayer_color"/>
+		<remap from="camera_info" to="/stereo/camera1/camera_info"/>
+		<remap from="~image" to="/camera1/debayer_resized/image"/>
+		<remap from="camera_info" to="/camera1/debayer_resized/camera_info"/>
+    </node>
+
+</launch>
