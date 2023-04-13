@@ -77,12 +77,21 @@ void SetStartupUserSet(CBaslerUniversalInstantCamera& camera)
     {
         camera.UserSetSelector.SetValue(Basler_UniversalCameraParams::UserSetSelector_UserSet1);
         camera.UserSetLoad.Execute();
+        cout << "Loaded: User Set 1" << endl;
     }
     else if (parameters["startup_user_set"] == "UserSet2")
     {
         camera.UserSetSelector.SetValue(Basler_UniversalCameraParams::UserSetSelector_UserSet2);
         camera.UserSetLoad.Execute();
+        cout << "Loaded: User Set 2" << endl;
     }
+    else if (parameters["startup_user_set"] == "UserSet3")
+    {
+        camera.UserSetSelector.SetValue(Basler_UniversalCameraParams::UserSetSelector_UserSet3);
+        camera.UserSetLoad.Execute();
+        cout << "Loaded: User Set 3" << endl;
+    }
+
     if (parameters["image_encoding"] == "bayer_rggb12")
     {
         camera.PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);

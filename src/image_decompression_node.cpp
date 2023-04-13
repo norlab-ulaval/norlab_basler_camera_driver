@@ -81,8 +81,8 @@ int main(int argc, char **argv)
 
     out_image_msg_1.header.frame_id = "Camera1";
     out_image_msg_2.header.frame_id = "Camera2";
-    out_image_msg_1.encoding = sensor_msgs::image_encodings::TYPE_8UC3;
-    out_image_msg_2.encoding = sensor_msgs::image_encodings::TYPE_8UC3;
+    out_image_msg_1.encoding = sensor_msgs::image_encodings::BGR8;
+    out_image_msg_2.encoding = sensor_msgs::image_encodings::BGR8;
     
 
     ros::Subscriber metadata_subscriber = nh.subscribe("/stereo/image_metapackets", 1, metadata_callback);
