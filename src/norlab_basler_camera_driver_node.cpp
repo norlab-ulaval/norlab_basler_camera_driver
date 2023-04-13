@@ -70,6 +70,12 @@ void EnableMetadata(CBaslerUniversalInstantCamera& camera)
     // camera.ChunkEnable.SetValue(true);
 }
 
+void setAcquisitionFrameRate(CBaslerUniversalInstantCamera& camera)
+{
+    camera.AcquisitionFrameRate.SetValue(frame_rate);
+    camera.AcquisitionFrameRateEnable.SetValue(true);
+}
+
 void SetSequenceExposure(CBaslerUniversalInstantCamera& camera)
 {
     camera.SequencerMode.SetValue(Basler_UniversalCameraParams::SequencerMode_Off);
@@ -80,7 +86,7 @@ void SetSequenceExposure(CBaslerUniversalInstantCamera& camera)
         camera.SequencerSetSelector.SetValue(i);
         camera.SequencerSetLoad.Execute();
         camera.ExposureTime.SetValue(exposures[i]);
-        camera.Gain.SetValue(1.0);
+        // camera.Gain.SetValue(1.0);
         if (parameters["image_encoding"] == "bayer_rggb12")
         {
             camera.PixelFormat.SetValue(Basler_UniversalCameraParams::PixelFormat_BayerRG12);
@@ -99,6 +105,7 @@ void SetSequenceExposure(CBaslerUniversalInstantCamera& camera)
     camera.SequencerConfigurationMode.SetValue(Basler_UniversalCameraParams::SequencerConfigurationMode_Off);
     camera.SequencerMode.SetValue(Basler_UniversalCameraParams::SequencerMode_On);
 }
+
 
 void SetStartupUserSet(CBaslerUniversalInstantCamera& camera)
 {
@@ -160,11 +167,6 @@ void CreateAndOpenPylonDevice(CTlFactory& tlFactory, CDeviceInfo device, CBasler
     camera.Open();
 }
 
-void setAcquisitionFrameRate(CBaslerUniversalInstantCamera& camera)
-{
-    camera.AcquisitionFrameRate.SetValue(frame_rate);
-    camera.AcquisitionFrameRateEnable.SetValue(true);
-}
 
 bool InitCameras()
 {
@@ -191,11 +193,12 @@ bool InitCameras()
 
     //CAcquireSingleFrameConfiguration sf_config = CAcquireSingleFrameConfiguration();
     //sf_config.ApplyConfiguration((*cameras)[camera1_index].GetNodeMap());
-    // setAcquisitionFrameRate((*cameras)[camera1_index]);
-    // if (enable_bracketing)
-    // {
-    //     SetSequenceExposure((*cameras)[camera1_index]);
-    // }
+    // setAcquisitionFrameRate((*cameras)[camera2_index]);
+    setAcquisitionFrameRate((*cameras)[camera2_index]);
+    if (enable_bracketing)
+    {
+        SetSequenceExposure((*cameras)[camera2_index]);
+    }
     // else
     // {
     //     InitializeExposureTimeAuto();
@@ -357,7 +360,7 @@ void GetParameters(ros::NodeHandle handler)
     handler.getParam("/stereo/norlab_basler_camera_driver_node/image_encoding", parameters["image_encoding"]);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/camera1_calibration_url", parameters["camera1_calibration_url"]);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/camera2_calibration_url", parameters["camera2_calibration_url"]);
-    handler.getParam("/stm32_node/frame_rate", frame_rate);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node/frame_rate", frame_rate);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/enable_bracketing", enable_bracketing);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/enable_panoramic", enable_panoramic);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/bracketing_values", exposures);
