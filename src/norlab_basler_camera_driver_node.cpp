@@ -17,6 +17,7 @@
 #include <norlab_basler_camera_driver/metadata_msg.h>
 
 #include <pylon/PylonIncludes.h>
+#include <pylon/BaslerUniversalCameraEventHandler.h>
 #include <pylon/BaslerUniversalInstantCamera.h>
 #include <pylon/BaslerUniversalInstantCameraArray.h>
 #include <pylon/AcquireSingleFrameConfiguration.h>
@@ -25,12 +26,19 @@
 using namespace std;
 using namespace Pylon;
 using namespace cv;
+using namespace Basler_UniversalCameraParams;
 
 std::unique_ptr<CBaslerUniversalInstantCameraArray> cameras;
 std::map<string, string> parameters;
 bool enable_bracketing;
 bool enable_panoramic;
 float frame_rate;
+
+vector<string> FrameStartEventsFrameId;
+vector<string> FrameStartEventsTimestamp;
+vector<string> ExposureEndEventsFrameId;
+vector<string> ExposureEndEventsTimestamp;
+
 // image_transport::Publisher out_image_panoramic_RGB8_pub;
 image_transport::CameraPublisher camera1_info_pub;
 ros::Publisher image_metapackets_pub;
@@ -56,6 +64,39 @@ cv_bridge::CvImage camera_info_msg;
 
 CBaslerUniversalGrabResultPtr camera1_ptrGrabResult;
 CBaslerUniversalGrabResultPtr camera2_ptrGrabResult;
+
+//Enumeration used for distinguishing different events.
+enum MyEvents
+{
+    eMyExposureEndEvent = 100,
+    eMyEventFrameStart = 200
+    // More events can be added here.
+};
+
+// Example handler for camera events.
+class CSampleCameraEventHandler : public CBaslerUniversalCameraEventHandler
+{
+public:
+    // Only very short processing tasks should be performed by this method. Otherwise, the event notification will block the
+    // processing of images.
+    virtual void OnCameraEvent( CBaslerUniversalInstantCamera& camera, intptr_t userProvidedId, GenApi::INode* /* pNode */ )
+    {
+        switch (userProvidedId)
+        {
+            case eMyExposureEndEvent:
+                if (camera.EventExposureEndFrameID.IsReadable()) // Applies to cameras based on SFNC 2.0 or later, e.g, USB cameras
+                {
+                    ExposureEndEventsFrameId.insert(ExposureEndEventsFrameId.begin(), to_string(camera.EventExposureEndFrameID.GetValue()));
+                    ExposureEndEventsTimestamp.insert(ExposureEndEventsTimestamp.begin(), to_string(camera.EventExposureEndTimestamp.GetValue()));
+                }
+                break;
+            case eMyEventFrameStart:
+                FrameStartEventsFrameId.insert(FrameStartEventsFrameId.begin(), to_string(camera.EventFrameStartFrameID.GetValue()));
+                FrameStartEventsTimestamp.insert(FrameStartEventsTimestamp.begin(), to_string(camera.EventFrameStartTimestamp.GetValue()));
+                break;
+        }
+    }
+};
 
 void EnableMetadata(CBaslerUniversalInstantCamera& camera)
 {
@@ -117,6 +158,31 @@ void CreateAndOpenPylonDevice(CTlFactory& tlFactory, CDeviceInfo device, CBasler
     camera.Open();
 }
 
+void SetEventsHandlers(CSampleCameraEventHandler* pHandler1){
+    (*cameras)[camera1_index].RegisterCameraEventHandler( pHandler1, "EventFrameStart", eMyEventFrameStart, RegistrationMode_ReplaceAll, Cleanup_None );
+    (*cameras)[camera1_index].RegisterCameraEventHandler( pHandler1, "EventExposureEndData", eMyExposureEndEvent, RegistrationMode_Append, Cleanup_None );
+
+    // Enable sending of Exposure End events.
+    // Select the event to receive.
+    (*cameras)[camera1_index].EventSelector.SetValue( EventSelector_ExposureEnd );
+
+    // Enable it.
+    if (!(*cameras)[camera1_index].EventNotification.TrySetValue( EventNotification_On ))
+    {
+        cout << "Was not able to enable event Exposure End" << endl;
+    }
+
+    // Enable event notification for the FrameStart event, if available
+    if ((*cameras)[camera1_index].EventSelector.TrySetValue( EventSelector_FrameStart ))
+    {
+        // Enable it.
+        if (!(*cameras)[camera1_index].EventNotification.TrySetValue( EventNotification_On ))
+        {
+            cout << "Was not able to enable event Frame Start" << endl;
+        }
+    }
+}
+
 bool InitCameras()
 {
     PylonInitialize();
@@ -135,11 +201,12 @@ bool InitCameras()
     // Create and attach all Pylon Devices.
     for (size_t i = 0; i < cameras->GetSize(); ++i)
     {
+        (*cameras)[i].GrabCameraEvents = true;
         CreateAndOpenPylonDevice(tlFactory, devices[i], (*cameras)[i], i);
         SetStartupUserSet((*cameras)[i]);
         EnableMetadata((*cameras)[i]);   
     }
-	
+
     camera1_decompressor = CImageDecompressor((*cameras)[camera1_index].GetNodeMap());
     camera2_decompressor = CImageDecompressor((*cameras)[camera2_index].GetNodeMap());
     return true;
@@ -160,6 +227,31 @@ void PublishCamInfoData(sensor_msgs::CameraInfo camera_info, string frame_id, im
     publisher.publish(camera_info_msg.toImageMsg(), ci);
 }
 
+void SaveValuesEventsMetadata(){
+    vector<string>::iterator itrFrameStart = find(FrameStartEventsFrameId.begin(), FrameStartEventsFrameId.end(), to_string(msg.imgFrameId));
+    vector<string>::iterator itrExposureEnd = find(ExposureEndEventsFrameId.begin(), ExposureEndEventsFrameId.end(), to_string(msg.imgFrameId));
+
+    float32_t exposureTime = (stof(ExposureEndEventsTimestamp[itrExposureEnd - ExposureEndEventsFrameId.begin()]) - stof(FrameStartEventsTimestamp[itrFrameStart - FrameStartEventsFrameId.begin()]))*1e-6;
+    msg.exposureTime = exposureTime;
+    if(FrameStartEventsFrameId.size() >= 3 && ExposureEndEventsFrameId.size() >= 3){
+        FrameStartEventsFrameId.pop_back();
+        FrameStartEventsTimestamp.pop_back();
+        ExposureEndEventsFrameId.pop_back();
+        ExposureEndEventsTimestamp.pop_back();
+    }
+
+    // cout << "################" << endl;
+    // cout << "Expoure Time: " << to_string(exposureTime) << endl;
+    // cout << "Frame Start Index: " << itrFrameStart - FrameStartEventsFrameId.begin() << endl;
+    // cout << "Exposure End Index: " << itrExposureEnd - ExposureEndEventsFrameId.begin() << endl;
+    // cout << "Frame Start: " << FrameStartEventsFrameId[itrFrameStart - FrameStartEventsFrameId.begin()] << endl;
+    // cout << "Exposure End: " << ExposureEndEventsFrameId[itrExposureEnd - ExposureEndEventsFrameId.begin()] << endl;
+    // cout << "Image Grabbed: " << msg.imgFrameId << endl;
+    // cout << "Frame Start Vector size: " << FrameStartEventsFrameId.size() << endl;
+    // cout << "Exposure End Vector size: " << ExposureEndEventsFrameId.size() << endl;
+
+}
+
 void PublishCamMetadata(CBaslerUniversalGrabResultPtr image1_ptr, CBaslerUniversalGrabResultPtr image2_ptr, ros::Publisher& publisher, ros::Time time)
 {
     if(msg.descriptor_size_cam1 == 0)
@@ -172,7 +264,6 @@ void PublishCamMetadata(CBaslerUniversalGrabResultPtr image1_ptr, CBaslerUnivers
     msg.header.stamp = time;
     msg.imgFrameId = (int32_t)(image1_ptr->ChunkFrameID.GetValue());
     msg.cameraTimestamp = (int64_t)(image1_ptr->ChunkTimestamp.GetValue());
-    msg.exposureTime = (float32_t)(image1_ptr->ChunkExposureTime.GetValue());
     camera1_decompressor.GetCompressionDescriptor(msg.descriptor_cam1.data(), &msg.descriptor_size_cam1);
     msg.imgSize_cam1 = image1_ptr->GetPayloadSize();
     msg.imgBuffer_cam1.resize(msg.imgSize_cam1);
@@ -183,6 +274,7 @@ void PublishCamMetadata(CBaslerUniversalGrabResultPtr image1_ptr, CBaslerUnivers
     msg.imgBuffer_cam2.resize(msg.imgSize_cam2);
     memcpy(msg.imgBuffer_cam2.data(), image2_ptr->GetBuffer(), msg.imgSize_cam2);
 
+    SaveValuesEventsMetadata();
     publisher.publish(msg);
 }
 
@@ -300,6 +392,8 @@ int main(int argc, char **argv)
     camera2_info_pub = it_cam2.advertiseCamera("empty_image", 10);
 
     InitCameras();
+    CSampleCameraEventHandler* pHandler1 = new CSampleCameraEventHandler;
+    SetEventsHandlers(pHandler1);
     InitCameraInfo(nh_cam1, nh_cam2);
     StartGrabbing();
 
@@ -309,6 +403,7 @@ int main(int argc, char **argv)
         r.sleep();
     }
 
+    delete pHandler1;
     ROS_INFO("Terminate Stereo Bracketing Node");
     return EXIT_SUCCESS;
 }
