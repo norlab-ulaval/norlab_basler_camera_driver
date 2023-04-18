@@ -44,11 +44,21 @@ void metadata_callback(const norlab_basler_camera_driver::metadata_msg& msg)
     }
     out_image_msg_1.header.stamp = time_now;
     cv_image1_bayerRG = Mat(camera1_targetImage.GetHeight(), camera1_targetImage.GetWidth(), CV_16UC1, (uint16_t *) camera1_targetImage.GetBuffer());
+    //cv_image1_bayerRG = Mat(camera1_targetImage.GetHeight(), camera1_targetImage.GetWidth(), CV_8UC1, (uint8_t *) camera1_targetImage.GetBuffer());
 
     Mat cv_image1_RGB16(cv_image1_bayerRG.cols, cv_image1_bayerRG.rows, CV_16UC3);
     cvtColor(cv_image1_bayerRG, cv_image1_RGB16, COLOR_BayerRG2RGB);
     cv_image1_RGB16.convertTo(cv_image1_RGB8_cam1, CV_8UC3, 1.0/16);
     out_image_msg_1.image = cv_image1_RGB8_cam1;
+
+    //Mat cv_image1_RGB8(cv_image1_bayerRG.cols, cv_image1_bayerRG.rows, CV_8UC3);
+    //cvtColor(cv_image1_bayerRG, cv_image1_RGB8, COLOR_BayerRG2RGB);
+    //out_image_msg_1.image = cv_image1_RGB8;
+ 
+    cout << "############################" << endl;
+    cout << "Camera 1 timestamp: " << msg.cameraTimestamp << endl;
+    cout << "Camera 1 frame id: " << msg.imgFrameId << endl;
+    cout << "Camera 1 mean value: " << mean(mean(cv_image1_RGB8_cam1)) << endl;
 
 
     camera2_decompressor = CImageDecompressor(msg.descriptor_cam2.data(), msg.descriptor_size_cam2);
@@ -60,11 +70,17 @@ void metadata_callback(const norlab_basler_camera_driver::metadata_msg& msg)
     }
     out_image_msg_2.header.stamp = time_now;
     cv_image2_bayerRG = Mat(camera2_targetImage.GetHeight(), camera2_targetImage.GetWidth(), CV_16UC1, (uint16_t *) camera2_targetImage.GetBuffer());
+    //cv_image2_bayerRG = Mat(camera2_targetImage.GetHeight(), camera2_targetImage.GetWidth(), CV_8UC1, (uint8_t *) camera2_targetImage.GetBuffer());
 
     Mat cv_image2_RGB16(cv_image2_bayerRG.cols, cv_image2_bayerRG.rows, CV_16UC3);
     cvtColor(cv_image2_bayerRG, cv_image2_RGB16, COLOR_BayerRG2RGB);
     cv_image2_RGB16.convertTo(cv_image2_RGB8_cam2, CV_8UC3, 1.0/16);
     out_image_msg_2.image = cv_image2_RGB8_cam2;
+
+    //Mat cv_image2_RGB8(cv_image2_bayerRG.cols, cv_image2_bayerRG.rows, CV_8UC3);
+    //cvtColor(cv_image2_bayerRG, cv_image2_RGB8, COLOR_BayerRG2RGB);
+    //out_image_msg_2.image = cv_image2_RGB8;
+
 
     out_image_camera1_pub.publish(out_image_msg_1.toImageMsg());
     out_image_camera2_pub.publish(out_image_msg_2.toImageMsg());

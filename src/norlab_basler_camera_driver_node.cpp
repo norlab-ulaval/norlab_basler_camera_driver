@@ -139,7 +139,7 @@ bool InitCameras()
         SetStartupUserSet((*cameras)[i]);
         EnableMetadata((*cameras)[i]);   
     }
-
+	
     camera1_decompressor = CImageDecompressor((*cameras)[camera1_index].GetNodeMap());
     camera2_decompressor = CImageDecompressor((*cameras)[camera2_index].GetNodeMap());
     return true;
@@ -171,6 +171,7 @@ void PublishCamMetadata(CBaslerUniversalGrabResultPtr image1_ptr, CBaslerUnivers
     }
     msg.header.stamp = time;
     msg.imgFrameId = (int32_t)(image1_ptr->ChunkFrameID.GetValue());
+    msg.cameraTimestamp = (int64_t)(image1_ptr->ChunkTimestamp.GetValue());
     msg.exposureTime = (float32_t)(image1_ptr->ChunkExposureTime.GetValue());
     camera1_decompressor.GetCompressionDescriptor(msg.descriptor_cam1.data(), &msg.descriptor_size_cam1);
     msg.imgSize_cam1 = image1_ptr->GetPayloadSize();
@@ -279,7 +280,7 @@ int main(int argc, char **argv)
     // ros::NodeHandle nh_pano("panoramic_8bits");
 
     GetParameters(nh);
-    ros::Rate r(frame_rate);
+    ros::Rate r(50);
     camera_info_msg.image = cv::Mat();
     if (parameters["image_encoding"] == "bayer_rggb12")
     {
