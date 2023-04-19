@@ -28,6 +28,52 @@ CPylonImage camera2_targetImage;
 cv_bridge::CvImage out_image_msg_1;
 cv_bridge::CvImage out_image_msg_2;
 
+uint32_t totalNumberImages = 0;
+vector<uint32_t> framesId;
+uint32_t countFramesId = 0;
+
+vector<float32_t> usedBrackets = {0.5, 2, 8, 16, 32};
+float confidenceInterval = 0.4;
+bool exposureTimeInBracketUsed = false;
+vector<int> exposureTimesIndexes;
+uint32_t countExposureTimes = 0;
+
+
+void VerificationFrameId(const norlab_basler_camera_driver::metadata_msg& msg){
+    framesId.insert(framesId.begin(), msg.imgFrameId);
+    if (framesId.size() == 2){
+        if ((framesId[0]-framesId[1]) != 1){
+            countFramesId += 1;
+            cout << "Frame ID not consecutives. Total number lost: " << countFramesId << endl;
+        }
+        framesId.pop_back();
+    }
+    totalNumberImages += 1;
+}
+
+void VerificationExposureTimes(const norlab_basler_camera_driver::metadata_msg& msg){
+    for (int i = 0; i < usedBrackets.size(); i++){
+        if (msg.exposureTime >= (usedBrackets[i] - usedBrackets[i]*confidenceInterval) && msg.exposureTime <= (usedBrackets[i] + usedBrackets[i]*confidenceInterval)){
+            exposureTimesIndexes.insert(exposureTimesIndexes.begin(), i);
+            exposureTimeInBracketUsed = true;
+        }
+    }
+    if (!(exposureTimeInBracketUsed)){
+        cout << "Image exposure time not in the brackets used. Exposure time from image: " << msg.exposureTime << endl;
+    }
+    if (exposureTimesIndexes.size() == 2){
+        if ((exposureTimesIndexes[0] - exposureTimesIndexes[1]) != 1){
+            if (!((exposureTimesIndexes[0] == 0 && exposureTimesIndexes[1] == (usedBrackets.size()-1)))){
+                countExposureTimes += 1;
+                cout << "Exposure Times not following good sequence. Total number lost: " << countExposureTimes << endl;
+                cout << "ET1: " << usedBrackets[exposureTimesIndexes[0]] << "\nET2: " << usedBrackets[exposureTimesIndexes[1]] << endl;
+            }
+        }
+        exposureTimesIndexes.pop_back();
+    }
+    exposureTimeInBracketUsed = false;
+}
+
 void metadata_callback(const norlab_basler_camera_driver::metadata_msg& msg)
 {
     Mat cv_image1_RGB8_cam1;
@@ -55,10 +101,14 @@ void metadata_callback(const norlab_basler_camera_driver::metadata_msg& msg)
     //cvtColor(cv_image1_bayerRG, cv_image1_RGB8, COLOR_BayerRG2RGB);
     //out_image_msg_1.image = cv_image1_RGB8;
  
-    cout << "############################" << endl;
-    cout << "Camera 1 timestamp: " << msg.cameraTimestamp << endl;
-    cout << "Camera 1 frame id: " << msg.imgFrameId << endl;
-    cout << "Camera 1 mean value: " << mean(mean(cv_image1_RGB8_cam1)) << endl;
+    // cout << "############################" << endl;
+    // cout << "Camera 1 timestamp: " << msg.cameraTimestamp << endl;
+    // cout << "Camera 1 frame id: " << msg.imgFrameId << endl;
+    // cout << "Camera 1 exposure time: " << msg.exposureTime << endl;
+    // cout << "Camera 1 mean value: " << mean(mean(cv_image1_RGB8_cam1)) << endl;
+
+    VerificationFrameId(msg);
+    VerificationExposureTimes(msg);
 
 
     camera2_decompressor = CImageDecompressor(msg.descriptor_cam2.data(), msg.descriptor_size_cam2);
