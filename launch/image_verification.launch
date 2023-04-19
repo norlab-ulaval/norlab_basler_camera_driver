@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<launch>
+    <node name="image_verification" pkg="norlab_basler_camera_driver" type="image_verification_node" output="screen"/>
+</launch>

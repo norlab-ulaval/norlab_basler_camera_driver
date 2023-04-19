@@ -13,10 +13,10 @@
 	<node if="$(arg enable_resize)" pkg="nodelet" type="nodelet" name="stereo_resize_camera1" args="load image_proc/resize stereo_camera1_manager">
 		<param name="scale_width" value="$(arg resize_factor)"/>
         <param name="scale_height" value="$(arg resize_factor)"/>
-        <remap from="image" to="/camera1/image_decompression"/>
+        <remap from="image" to="/camera1/image_decompressed"/>
 		<remap from="camera_info" to="/stereo/camera1/camera_info"/>
-		<remap from="~image" to="/camera1/resized/image_decompression"/>
-		<remap from="camera_info" to="/camera1/resized/image_decompression"/>
+		<remap from="~image" to="/camera1/resized/image_decompressed"/>
+		<remap from="camera_info" to="/camera1/resized/image_decompressed"/>
     </node>
 
     <node if="$(arg enable_resize)" name="stereo_camera2_manager" pkg="nodelet" type="nodelet" args="manager" output="screen">
@@ -25,10 +25,10 @@
 	<node if="$(arg enable_resize)" pkg="nodelet" type="nodelet" name="stereo_resize_camera2" args="load image_proc/resize stereo_camera2_manager">
 		<param name="scale_width" value="$(arg resize_factor)"/>
         <param name="scale_height" value="$(arg resize_factor)"/>
-        <remap from="image" to="/camera2/image_decompression"/>
+        <remap from="image" to="/camera2/image_decompressed"/>
 		<remap from="camera_info" to="/stereo/camera2/camera_info"/>
-		<remap from="~image" to="/camera2/resized/image_decompression"/>
-		<remap from="camera_info" to="/camera2/resized/image_decompression"/>
+		<remap from="~image" to="/camera2/resized/image_decompressed"/>
+		<remap from="camera_info" to="/camera2/resized/image_decompressed"/>
     </node>
 
 </launch>
