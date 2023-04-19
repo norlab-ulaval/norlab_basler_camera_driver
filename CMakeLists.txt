@@ -67,6 +67,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
+  packets_msg.msg
   metadata_msg.msg
 )
 
@@ -153,6 +154,7 @@ include_directories(
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(${PROJECT_NAME}_node src/${PROJECT_NAME}_node.cpp)
 add_executable(image_decompression_node src/image_decompression_node.cpp)
+add_executable(image_verification_node src/image_verification_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -165,6 +167,7 @@ add_executable(image_decompression_node src/image_decompression_node.cpp)
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(${PROJECT_NAME}_node ${PROJECT_NAME}_generate_messages_cpp)
 add_dependencies(image_decompression_node ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(image_verification_node ${PROJECT_NAME}_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(
@@ -176,6 +179,13 @@ target_link_libraries(
 
 target_link_libraries(
     image_decompression_node
+     ${catkin_LIBRARIES}
+     ${Pylon_LIBRARIES}
+     ${OpenCV_LIBS}
+)
+
+target_link_libraries(
+    image_verification_node
      ${catkin_LIBRARIES}
      ${Pylon_LIBRARIES}
      ${OpenCV_LIBS}

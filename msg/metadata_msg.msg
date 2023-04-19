@@ -1,12 +1,6 @@
 std_msgs/Header header
-int32 imgFrameId
-int64 cameraTimestamp
-float32 exposureTime
-uint8[] descriptor_cam1
-uint64 descriptor_size_cam1
-uint8[] imgBuffer_cam1
-uint64 imgSize_cam1
-uint8[] descriptor_cam2
-uint64 descriptor_size_cam2
-uint8[] imgBuffer_cam2
-uint64 imgSize_cam2
+int32 FrameId
+int64 Timestamp
+float32 ExposureTime
+
+

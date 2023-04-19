@@ -14,6 +14,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
 #include <camera_info_manager/camera_info_manager.h>
+#include <norlab_basler_camera_driver/packets_msg.h>
 #include <norlab_basler_camera_driver/metadata_msg.h>
 
 #include <pylon/PylonIncludes.h>
@@ -28,40 +29,47 @@ using namespace Pylon;
 using namespace cv;
 using namespace Basler_UniversalCameraParams;
 
+// Camera array
 std::unique_ptr<CBaslerUniversalInstantCameraArray> cameras;
+size_t maxCamerasToUse = 2;
+int camera1_index;
+int camera2_index;
+
+// Params
 std::map<string, string> parameters;
 bool enable_bracketing;
 bool enable_panoramic;
 float frame_rate;
 
-vector<string> FrameStartEventsFrameId;
-vector<string> FrameStartEventsTimestamp;
-vector<string> ExposureEndEventsFrameId;
-vector<string> ExposureEndEventsTimestamp;
+// Camera Events
+vector<string> Camera1FrameStartEventsFrameId;
+vector<string> Camera1FrameStartEventsTimestamp;
+vector<string> Camera1ExposureEndEventsFrameId;
+vector<string> Camera1ExposureEndEventsTimestamp;
 
-// image_transport::Publisher out_image_panoramic_RGB8_pub;
+vector<string> Camera2FrameStartEventsFrameId;
+vector<string> Camera2FrameStartEventsTimestamp;
+vector<string> Camera2ExposureEndEventsFrameId;
+vector<string> Camera2ExposureEndEventsTimestamp;
+
 image_transport::CameraPublisher camera1_info_pub;
-ros::Publisher image_metapackets_pub;
 image_transport::CameraPublisher camera2_info_pub;
 std::unique_ptr<camera_info_manager::CameraInfoManager> c1info_;
 std::unique_ptr<camera_info_manager::CameraInfoManager> c2info_;
-size_t maxCamerasToUse = 2;
-int camera1_index;
-int camera2_index;
-// std::vector<float> exposures;
-// int idxExposures = 0;
+ros::Publisher camera1_packets_pub;
+ros::Publisher camera2_packets_pub;
+ros::Publisher camera1_metadata_pub;
+ros::Publisher camera2_metadata_pub;
 
-norlab_basler_camera_driver::metadata_msg msg;
+norlab_basler_camera_driver::packets_msg camera1_packets_msg;
+norlab_basler_camera_driver::metadata_msg camera1_metadata_msg;
+norlab_basler_camera_driver::packets_msg camera2_packets_msg;
+norlab_basler_camera_driver::metadata_msg camera2_metadata_msg;
+
+// Init
 CImageDecompressor camera1_decompressor;
 CImageDecompressor camera2_decompressor;
-// CompressionInfo_t cam_info;
-// CPylonImage camera1_targetImage;
-// CPylonImage camera2_targetImage;
-
-// Mat cv_image1_bayerRG;
-// Mat cv_image2_bayerRG;
 cv_bridge::CvImage camera_info_msg;
-
 CBaslerUniversalGrabResultPtr camera1_ptrGrabResult;
 CBaslerUniversalGrabResultPtr camera2_ptrGrabResult;
 
@@ -70,7 +78,6 @@ enum MyEvents
 {
     eMyExposureEndEvent = 100,
     eMyEventFrameStart = 200
-    // More events can be added here.
 };
 
 // Example handler for camera events.
@@ -81,19 +88,39 @@ public:
     // processing of images.
     virtual void OnCameraEvent( CBaslerUniversalInstantCamera& camera, intptr_t userProvidedId, GenApi::INode* /* pNode */ )
     {
-        switch (userProvidedId)
+        if (camera.GetDeviceInfo().GetUserDefinedName() == "Camera_1")
         {
+            switch (userProvidedId)
+            {
             case eMyExposureEndEvent:
                 if (camera.EventExposureEndFrameID.IsReadable()) // Applies to cameras based on SFNC 2.0 or later, e.g, USB cameras
                 {
-                    ExposureEndEventsFrameId.insert(ExposureEndEventsFrameId.begin(), to_string(camera.EventExposureEndFrameID.GetValue()));
-                    ExposureEndEventsTimestamp.insert(ExposureEndEventsTimestamp.begin(), to_string(camera.EventExposureEndTimestamp.GetValue()));
+                    Camera1ExposureEndEventsFrameId.insert(Camera1ExposureEndEventsFrameId.begin(), to_string(camera.EventExposureEndFrameID.GetValue()));
+                    Camera1ExposureEndEventsTimestamp.insert(Camera1ExposureEndEventsTimestamp.begin(), to_string(camera.EventExposureEndTimestamp.GetValue()));
                 }
                 break;
             case eMyEventFrameStart:
-                FrameStartEventsFrameId.insert(FrameStartEventsFrameId.begin(), to_string(camera.EventFrameStartFrameID.GetValue()));
-                FrameStartEventsTimestamp.insert(FrameStartEventsTimestamp.begin(), to_string(camera.EventFrameStartTimestamp.GetValue()));
+                Camera1FrameStartEventsFrameId.insert(Camera1FrameStartEventsFrameId.begin(), to_string(camera.EventFrameStartFrameID.GetValue()));
+                Camera1FrameStartEventsTimestamp.insert(Camera1FrameStartEventsTimestamp.begin(), to_string(camera.EventFrameStartTimestamp.GetValue()));
                 break;
+            }
+        }
+        else
+        {
+            switch (userProvidedId)
+            {
+            case eMyExposureEndEvent:
+                if (camera.EventExposureEndFrameID.IsReadable()) // Applies to cameras based on SFNC 2.0 or later, e.g, USB cameras
+                {
+                    Camera2ExposureEndEventsFrameId.insert(Camera2ExposureEndEventsFrameId.begin(), to_string(camera.EventExposureEndFrameID.GetValue()));
+                    Camera2ExposureEndEventsTimestamp.insert(Camera2ExposureEndEventsTimestamp.begin(), to_string(camera.EventExposureEndTimestamp.GetValue()));
+                }
+                break;
+            case eMyEventFrameStart:
+                Camera2FrameStartEventsFrameId.insert(Camera2FrameStartEventsFrameId.begin(), to_string(camera.EventFrameStartFrameID.GetValue()));
+                Camera2FrameStartEventsTimestamp.insert(Camera2FrameStartEventsTimestamp.begin(), to_string(camera.EventFrameStartTimestamp.GetValue()));
+                break;
+            }
         }
     }
 };
@@ -158,25 +185,25 @@ void CreateAndOpenPylonDevice(CTlFactory& tlFactory, CDeviceInfo device, CBasler
     camera.Open();
 }
 
-void SetEventsHandlers(CSampleCameraEventHandler* pHandler1){
-    (*cameras)[camera1_index].RegisterCameraEventHandler( pHandler1, "EventFrameStart", eMyEventFrameStart, RegistrationMode_ReplaceAll, Cleanup_None );
-    (*cameras)[camera1_index].RegisterCameraEventHandler( pHandler1, "EventExposureEndData", eMyExposureEndEvent, RegistrationMode_Append, Cleanup_None );
+void SetEventsHandlers(CSampleCameraEventHandler* pHandler1, CBaslerUniversalInstantCamera& camera){
+    camera.RegisterCameraEventHandler( pHandler1, "EventFrameStart", eMyEventFrameStart, RegistrationMode_ReplaceAll, Cleanup_None );
+    camera.RegisterCameraEventHandler( pHandler1, "EventExposureEndData", eMyExposureEndEvent, RegistrationMode_Append, Cleanup_None );
 
     // Enable sending of Exposure End events.
     // Select the event to receive.
-    (*cameras)[camera1_index].EventSelector.SetValue( EventSelector_ExposureEnd );
+    camera.EventSelector.SetValue( EventSelector_ExposureEnd );
 
     // Enable it.
-    if (!(*cameras)[camera1_index].EventNotification.TrySetValue( EventNotification_On ))
+    if (!camera.EventNotification.TrySetValue( EventNotification_On ))
     {
         cout << "Was not able to enable event Exposure End" << endl;
     }
 
     // Enable event notification for the FrameStart event, if available
-    if ((*cameras)[camera1_index].EventSelector.TrySetValue( EventSelector_FrameStart ))
+    if (camera.EventSelector.TrySetValue( EventSelector_FrameStart ))
     {
         // Enable it.
-        if (!(*cameras)[camera1_index].EventNotification.TrySetValue( EventNotification_On ))
+        if (!camera.EventNotification.TrySetValue( EventNotification_On ))
         {
             cout << "Was not able to enable event Frame Start" << endl;
         }
@@ -197,14 +224,14 @@ bool InitCameras()
 
     // Create an array of instant cameras for the found devices and avoid exceeding a maximum number of devices.
     cameras = std::unique_ptr<CBaslerUniversalInstantCameraArray>(new CBaslerUniversalInstantCameraArray(min(devices.size(), maxCamerasToUse)));
-
+    
     // Create and attach all Pylon Devices.
     for (size_t i = 0; i < cameras->GetSize(); ++i)
     {
         (*cameras)[i].GrabCameraEvents = true;
         CreateAndOpenPylonDevice(tlFactory, devices[i], (*cameras)[i], i);
         SetStartupUserSet((*cameras)[i]);
-        EnableMetadata((*cameras)[i]);   
+        EnableMetadata((*cameras)[i]); 
     }
 
     camera1_decompressor = CImageDecompressor((*cameras)[camera1_index].GetNodeMap());
@@ -227,54 +254,40 @@ void PublishCamInfoData(sensor_msgs::CameraInfo camera_info, string frame_id, im
     publisher.publish(camera_info_msg.toImageMsg(), ci);
 }
 
-void SaveValuesEventsMetadata(){
-    vector<string>::iterator itrFrameStart = find(FrameStartEventsFrameId.begin(), FrameStartEventsFrameId.end(), to_string(msg.imgFrameId));
-    vector<string>::iterator itrExposureEnd = find(ExposureEndEventsFrameId.begin(), ExposureEndEventsFrameId.end(), to_string(msg.imgFrameId));
+void PublishCamMetadata(CBaslerUniversalGrabResultPtr image_ptr, norlab_basler_camera_driver::metadata_msg& msg, ros::Publisher& publisher, ros::Time time, vector<string>& FrameStartFrameId, vector<string>& FrameStartTimestamp, vector<string>& ExposureEndFrameId, vector<string>& ExposureEndTimestamp)
+{
+    msg.header.stamp = time;
+    msg.FrameId = (int32_t)(image_ptr->ChunkFrameID.GetValue());
+    msg.Timestamp = (int64_t)(image_ptr->ChunkTimestamp.GetValue());
 
-    float32_t exposureTime = (stof(ExposureEndEventsTimestamp[itrExposureEnd - ExposureEndEventsFrameId.begin()]) - stof(FrameStartEventsTimestamp[itrFrameStart - FrameStartEventsFrameId.begin()]))*1e-6;
-    msg.exposureTime = exposureTime;
-    if(FrameStartEventsFrameId.size() >= 3 && ExposureEndEventsFrameId.size() >= 3){
-        FrameStartEventsFrameId.pop_back();
-        FrameStartEventsTimestamp.pop_back();
-        ExposureEndEventsFrameId.pop_back();
-        ExposureEndEventsTimestamp.pop_back();
+    vector<string>::iterator itrFrameStart = find(FrameStartFrameId.begin(), FrameStartFrameId.end(), to_string(msg.FrameId));
+    vector<string>::iterator itrExposureEnd = find(ExposureEndFrameId.begin(), ExposureEndFrameId.end(), to_string(msg.FrameId));
+
+    float32_t ExposureTime = (stof(ExposureEndTimestamp[itrExposureEnd - ExposureEndFrameId.begin()]) - stof(FrameStartTimestamp[itrFrameStart - FrameStartFrameId.begin()]))*1e-6;
+    msg.ExposureTime = ExposureTime;
+    if(FrameStartFrameId.size() >= 3 && ExposureEndFrameId.size() >= 3){
+        FrameStartFrameId.pop_back();
+        FrameStartTimestamp.pop_back();
+        ExposureEndFrameId.pop_back();
+        ExposureEndTimestamp.pop_back();
     }
-
-    // cout << "################" << endl;
-    // cout << "Expoure Time: " << to_string(exposureTime) << endl;
-    // cout << "Frame Start Index: " << itrFrameStart - FrameStartEventsFrameId.begin() << endl;
-    // cout << "Exposure End Index: " << itrExposureEnd - ExposureEndEventsFrameId.begin() << endl;
-    // cout << "Frame Start: " << FrameStartEventsFrameId[itrFrameStart - FrameStartEventsFrameId.begin()] << endl;
-    // cout << "Exposure End: " << ExposureEndEventsFrameId[itrExposureEnd - ExposureEndEventsFrameId.begin()] << endl;
-    // cout << "Image Grabbed: " << msg.imgFrameId << endl;
-    // cout << "Frame Start Vector size: " << FrameStartEventsFrameId.size() << endl;
-    // cout << "Exposure End Vector size: " << ExposureEndEventsFrameId.size() << endl;
-
+    publisher.publish(msg);
 }
 
-void PublishCamMetadata(CBaslerUniversalGrabResultPtr image1_ptr, CBaslerUniversalGrabResultPtr image2_ptr, ros::Publisher& publisher, ros::Time time)
+void PublishCamPackets(CImageDecompressor& camera_decompressor, CBaslerUniversalGrabResultPtr image_ptr, norlab_basler_camera_driver::packets_msg msg, ros::Publisher& publisher, ros::Time time)
 {
-    if(msg.descriptor_size_cam1 == 0)
+    if(msg.descriptor_size == 0)
     {
-        camera1_decompressor.GetCompressionDescriptor(NULL, &msg.descriptor_size_cam1);
-        camera2_decompressor.GetCompressionDescriptor(NULL, &msg.descriptor_size_cam2);
-        msg.descriptor_cam1.resize(msg.descriptor_size_cam1);
-        msg.descriptor_cam2.resize(msg.descriptor_size_cam2);
+        camera_decompressor.GetCompressionDescriptor(NULL, &msg.descriptor_size);
+        msg.descriptor.resize(msg.descriptor_size);
     }
     msg.header.stamp = time;
-    msg.imgFrameId = (int32_t)(image1_ptr->ChunkFrameID.GetValue());
-    msg.cameraTimestamp = (int64_t)(image1_ptr->ChunkTimestamp.GetValue());
-    camera1_decompressor.GetCompressionDescriptor(msg.descriptor_cam1.data(), &msg.descriptor_size_cam1);
-    msg.imgSize_cam1 = image1_ptr->GetPayloadSize();
-    msg.imgBuffer_cam1.resize(msg.imgSize_cam1);
-    memcpy(msg.imgBuffer_cam1.data(), image1_ptr->GetBuffer(), msg.imgSize_cam1);
 
-    camera2_decompressor.GetCompressionDescriptor(msg.descriptor_cam2.data(), &msg.descriptor_size_cam2);
-    msg.imgSize_cam2 = image2_ptr->GetPayloadSize();
-    msg.imgBuffer_cam2.resize(msg.imgSize_cam2);
-    memcpy(msg.imgBuffer_cam2.data(), image2_ptr->GetBuffer(), msg.imgSize_cam2);
+    camera_decompressor.GetCompressionDescriptor(msg.descriptor.data(), &msg.descriptor_size);
+    msg.imgSize = image_ptr->GetPayloadSize();
+    msg.imgBuffer.resize(msg.imgSize);
+    memcpy(msg.imgBuffer.data(), image_ptr->GetBuffer(), msg.imgSize);
 
-    SaveValuesEventsMetadata();
     publisher.publish(msg);
 }
 
@@ -287,49 +300,13 @@ void GrabLoop()
     {
         ros::Time timestamp_ros = ros::Time::now();
 
-        // if (parameters["image_encoding"] == "bayer_rggb12")
-        // {
-        //     cv_image1_bayerRG = Mat(camera1_targetImage.GetHeight(), camera1_targetImage.GetWidth(), CV_16UC1, (uint16_t *) camera1_targetImage.GetBuffer());
-        //     cv_image2_bayerRG = Mat(camera2_targetImage.GetHeight(), camera2_targetImage.GetWidth(), CV_16UC1, (uint16_t *) camera2_targetImage.GetBuffer());
-        // }
-        // else if (parameters["image_encoding"] == "bayer_rggb8")
-        // {
-        //     cv_image1_bayerRG = Mat(camera1_targetImage.GetHeight(), camera1_targetImage.GetWidth(), CV_8UC1, (uint8_t *) camera1_targetImage.GetBuffer());
-        //     cv_image2_bayerRG = Mat(camera2_targetImage.GetHeight(), camera2_targetImage.GetWidth(), CV_8UC1, (uint8_t *) camera2_targetImage.GetBuffer());
-        // }
-
         PublishCamInfoData(c1info_->getCameraInfo(), "camera1_link", camera1_info_pub, timestamp_ros);
         PublishCamInfoData(c2info_->getCameraInfo(), "camera2_link", camera2_info_pub, timestamp_ros);
-        PublishCamMetadata(camera1_ptrGrabResult, camera2_ptrGrabResult, image_metapackets_pub, timestamp_ros);
 
-        // // Publish panoramic 8bits images
-        // if (enable_panoramic && parameters["image_encoding"] == "bayer_rggb12")
-        // {
-        //     Mat cv_image1_RGB16(cv_image1_bayerRG.cols, cv_image1_bayerRG.rows, CV_16UC3);
-        //     cvtColor(cv_image1_bayerRG, cv_image1_RGB16, COLOR_BayerRG2RGB);
-        //     Mat cv_image1_RGB8;
-        //     cv_image1_RGB16.convertTo(cv_image1_RGB8, CV_8UC3, 1/16.0);
-
-        //     Mat cv_image2_RGB16(cv_image2_bayerRG.cols, cv_image2_bayerRG.rows, CV_16UC3);
-        //     cvtColor(cv_image2_bayerRG, cv_image2_RGB16, COLOR_BayerRG2RGB);
-        //     Mat cv_image2_RGB8;
-        //     cv_image2_RGB16.convertTo(cv_image2_RGB8, CV_8UC3, 1/16.0);
-        //     Mat cv_panoramic_RGB8;
-        //     try
-        //     {
-        //         hconcat(cv_image1_RGB8, cv_image2_RGB8, cv_panoramic_RGB8);
-        //     }
-        //     catch (...)
-        //     {
-        //         ROS_INFO("No concatenation");
-        //     }
-        //     cv_bridge::CvImage out_panoramic_RGB8_msg;
-        //     out_panoramic_RGB8_msg.header.stamp = timestamp_ros;
-        //     out_panoramic_RGB8_msg.header.frame_id = "panoramic_link";
-        //     out_panoramic_RGB8_msg.encoding = sensor_msgs::image_encodings::TYPE_8UC3;
-        //     out_panoramic_RGB8_msg.image = cv_panoramic_RGB8;
-        //     out_image_panoramic_RGB8_pub.publish(out_panoramic_RGB8_msg.toImageMsg());
-        // }
+        PublishCamPackets(camera1_decompressor, camera1_ptrGrabResult, camera1_packets_msg, camera1_packets_pub, timestamp_ros);
+        PublishCamPackets(camera2_decompressor, camera2_ptrGrabResult, camera2_packets_msg, camera2_packets_pub, timestamp_ros);
+        PublishCamMetadata(camera1_ptrGrabResult, camera1_metadata_msg, camera1_metadata_pub, timestamp_ros, Camera1FrameStartEventsFrameId, Camera1FrameStartEventsTimestamp, Camera1ExposureEndEventsFrameId, Camera1ExposureEndEventsTimestamp);
+        PublishCamMetadata(camera2_ptrGrabResult, camera2_metadata_msg, camera2_metadata_pub, timestamp_ros, Camera2FrameStartEventsFrameId, Camera2FrameStartEventsTimestamp, Camera2ExposureEndEventsFrameId, Camera2ExposureEndEventsTimestamp);
 
         camera1_ptrGrabResult.Release();
         camera2_ptrGrabResult.Release();
@@ -385,15 +362,18 @@ int main(int argc, char **argv)
     
     image_transport::ImageTransport it_cam1(nh_cam1);
     image_transport::ImageTransport it_cam2(nh_cam2);
-    // image_transport::ImageTransport it_pano(nh_pano);
-    // out_image_panoramic_RGB8_pub = it_pano.advertise("image", 10);
     camera1_info_pub = it_cam1.advertiseCamera("empty_image", 10);
-    image_metapackets_pub = nh.advertise<norlab_basler_camera_driver::metadata_msg>("image_metapackets", 10);
     camera2_info_pub = it_cam2.advertiseCamera("empty_image", 10);
+
+    camera1_packets_pub = nh.advertise<norlab_basler_camera_driver::packets_msg>("camera1/image_compressed", 10);
+    camera2_packets_pub = nh.advertise<norlab_basler_camera_driver::packets_msg>("camera2/image_compressed", 10);
+    camera1_metadata_pub = nh.advertise<norlab_basler_camera_driver::metadata_msg>("camera1/metadata", 10);
+    camera2_metadata_pub = nh.advertise<norlab_basler_camera_driver::metadata_msg>("camera2/metadata", 10);
 
     InitCameras();
     CSampleCameraEventHandler* pHandler1 = new CSampleCameraEventHandler;
-    SetEventsHandlers(pHandler1);
+    SetEventsHandlers(pHandler1, (*cameras)[camera1_index]);
+    SetEventsHandlers(pHandler1, (*cameras)[camera2_index]);
     InitCameraInfo(nh_cam1, nh_cam2);
     StartGrabbing();
 
