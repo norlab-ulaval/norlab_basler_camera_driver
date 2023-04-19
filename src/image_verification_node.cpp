@@ -17,8 +17,9 @@ using namespace cv;
 
 // #################################################################################################################
 class Verification {
+    string cameraName;
     public:
-        Verification();
+        Verification(string);
         void Callback(const norlab_basler_camera_driver::metadata_msg&);
         void VerificationFrameId(const norlab_basler_camera_driver::metadata_msg&);
         void VerificationExposureTimes(const norlab_basler_camera_driver::metadata_msg&);
@@ -35,8 +36,8 @@ class Verification {
         uint32_t countExposureTimes = 0;
 };
 
-Verification::Verification(){
-
+Verification::Verification(string name){
+    cameraName = name;
 }
 
 void Verification::Callback(const norlab_basler_camera_driver::metadata_msg& msg){
@@ -49,7 +50,7 @@ void Verification::VerificationFrameId(const norlab_basler_camera_driver::metada
     if (framesId.size() == 2){
         if ((framesId[0]-framesId[1]) != 1){
             countFramesId += 1;
-            cout << "Frame ID not consecutives. Total number lost: " << countFramesId << endl;
+            cout << cameraName << ": Frame ID not consecutives. Total number lost: " << countFramesId << endl;
         }
         framesId.pop_back();
     }
@@ -64,13 +65,13 @@ void Verification::VerificationExposureTimes(const norlab_basler_camera_driver::
         }
     }
     if (!(exposureTimeInBracketUsed)){
-        cout << "Image exposure time not in the brackets used. Exposure time from image: " << msg.ExposureTime << endl;
+        cout << cameraName << ": Image exposure time not in the brackets used. Exposure time from image: " << msg.ExposureTime << endl;
     }
     if (exposureTimesIndexes.size() == 2){
         if ((exposureTimesIndexes[0] - exposureTimesIndexes[1]) != 1){
             if (!((exposureTimesIndexes[0] == 0 && exposureTimesIndexes[1] == (usedBrackets.size()-1)))){
                 countExposureTimes += 1;
-                cout << "Exposure Times not following good sequence. Total number lost: " << countExposureTimes << endl;
+                cout << cameraName << ": Exposure Times not following good sequence. Total number lost: " << countExposureTimes << endl;
                 cout << "ET1: " << usedBrackets[exposureTimesIndexes[0]] << "\nET2: " << usedBrackets[exposureTimesIndexes[1]] << endl;
             }
         }
@@ -87,8 +88,8 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "image_verification");
     ros::NodeHandle nh;
 
-    Verification camera1;
-    Verification camera2;
+    Verification camera1("Camera1");
+    Verification camera2("Camera2");
 
     ros::Subscriber camera1_metadata_subscriber = nh.subscribe("/stereo/camera1/metadata", 1, &Verification::Callback, &camera1);
     ros::Subscriber camera2_metadata_subscriber = nh.subscribe("/stereo/camera2/metadata", 1, &Verification::Callback, &camera2);

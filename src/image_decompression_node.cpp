@@ -17,18 +17,20 @@ using namespace cv;
 
 // #################################################################################################################
 class Camera {
+    string cameraName;
     image_transport::Publisher out_pub;
     CImageDecompressor camera_decompressor;
     CPylonImage targetImage;
     cv_bridge::CvImage out_image_msg;
 
     public:
-        Camera(image_transport::Publisher, CImageDecompressor&, CPylonImage&, cv_bridge::CvImage);
+        Camera(string, image_transport::Publisher, CImageDecompressor&, CPylonImage&, cv_bridge::CvImage);
         void ImageDecompressorCallback(const norlab_basler_camera_driver::packets_msg&);
         void FormatImagesDecompressed(const norlab_basler_camera_driver::packets_msg&, Mat&, Mat&);
 };
 
-Camera::Camera(image_transport::Publisher topic_out, CImageDecompressor& decompressor, CPylonImage& image, cv_bridge::CvImage out_image){
+Camera::Camera(string name, image_transport::Publisher topic_out, CImageDecompressor& decompressor, CPylonImage& image, cv_bridge::CvImage out_image){
+    cameraName = name;
     out_pub = topic_out;
     camera_decompressor = decompressor;
     targetImage = image;
@@ -49,7 +51,7 @@ void Camera::FormatImagesDecompressed(const norlab_basler_camera_driver::packets
         camera_decompressor.DecompressImage(targetImage, msg.imgBuffer.data(), msg.imgSize);
     }
     catch(...){
-        cout << "lost an image due to compression issue" << endl;
+        cout << cameraName << ": lost an image due to compression issue" << endl;
     }
     out_image_msg.header.stamp = msg.header.stamp;
     cv_image_bayerRG = Mat(targetImage.GetHeight(), targetImage.GetWidth(), CV_16UC1, (uint16_t *) targetImage.GetBuffer());
@@ -85,8 +87,8 @@ int main(int argc, char **argv)
     out_image_msg_1.encoding = sensor_msgs::image_encodings::BGR8;
     out_image_msg_2.encoding = sensor_msgs::image_encodings::BGR8;
 
-    Camera camera1(out_image_camera1_pub, camera1_decompressor, camera1_targetImage, out_image_msg_1);
-    Camera camera2(out_image_camera2_pub, camera2_decompressor, camera2_targetImage, out_image_msg_2);
+    Camera camera1("Camera1", out_image_camera1_pub, camera1_decompressor, camera1_targetImage, out_image_msg_1);
+    Camera camera2("Camera2", out_image_camera2_pub, camera2_decompressor, camera2_targetImage, out_image_msg_2);
 
     ros::Subscriber camera1_packets_subscriber = nh.subscribe("/stereo/camera1/image_compressed", 1, &Camera::ImageDecompressorCallback, &camera1);
     ros::Subscriber camera2_packets_subscriber = nh.subscribe("/stereo/camera2/image_compressed", 1, &Camera::ImageDecompressorCallback, &camera2);
