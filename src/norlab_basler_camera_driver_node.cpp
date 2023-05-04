@@ -39,7 +39,7 @@ int camera2_index;
 std::map<string, string> parameters;
 bool enable_bracketing;
 bool enable_panoramic;
-float frame_rate;
+float gain;
 
 // Camera Events
 vector<string> Camera1FrameStartEventsFrameId;
@@ -77,7 +77,8 @@ CBaslerUniversalGrabResultPtr camera2_ptrGrabResult;
 enum MyEvents
 {
     eMyExposureEndEvent = 100,
-    eMyEventFrameStart = 200
+    eMyEventFrameStart = 200,
+    eMyEventTemperatureStatusChangedStatus = 300,
 };
 
 // Example handler for camera events.
@@ -103,6 +104,8 @@ public:
                 Camera1FrameStartEventsFrameId.insert(Camera1FrameStartEventsFrameId.begin(), to_string(camera.EventFrameStartFrameID.GetValue()));
                 Camera1FrameStartEventsTimestamp.insert(Camera1FrameStartEventsTimestamp.begin(), to_string(camera.EventFrameStartTimestamp.GetValue()));
                 break;
+            case eMyEventTemperatureStatusChangedStatus:
+                ROS_INFO_STREAM("Camera1 Temperature Status Changed to: " << to_string(camera.EventTemperatureStatusChanged.GetValue()) << " at timestamp " << to_string(camera.EventTemperatureStatusChangedTimestamp.GetValue()) << endl);
             }
         }
         else
@@ -120,6 +123,8 @@ public:
                 Camera2FrameStartEventsFrameId.insert(Camera2FrameStartEventsFrameId.begin(), to_string(camera.EventFrameStartFrameID.GetValue()));
                 Camera2FrameStartEventsTimestamp.insert(Camera2FrameStartEventsTimestamp.begin(), to_string(camera.EventFrameStartTimestamp.GetValue()));
                 break;
+            case eMyEventTemperatureStatusChangedStatus:
+                ROS_INFO_STREAM("Camera2 Temperature Status Changed to: " << to_string(camera.EventTemperatureStatusChanged.GetValue()) << " at timestamp " << to_string(camera.EventTemperatureStatusChangedTimestamp.GetValue()) << endl);
             }
         }
     }
@@ -170,6 +175,11 @@ void SetStartupUserSet(CBaslerUniversalInstantCamera& camera)
     }
 }
 
+void SetParameters(CBaslerUniversalInstantCamera& camera)
+{
+    camera.Gain.SetValue(gain);
+}
+
 void CreateAndOpenPylonDevice(CTlFactory& tlFactory, CDeviceInfo device, CBaslerUniversalInstantCamera& camera, size_t i)
 {
     camera.Attach(tlFactory.CreateDevice(device));
@@ -188,6 +198,7 @@ void CreateAndOpenPylonDevice(CTlFactory& tlFactory, CDeviceInfo device, CBasler
 void SetEventsHandlers(CSampleCameraEventHandler* pHandler1, CBaslerUniversalInstantCamera& camera){
     camera.RegisterCameraEventHandler( pHandler1, "EventFrameStart", eMyEventFrameStart, RegistrationMode_ReplaceAll, Cleanup_None );
     camera.RegisterCameraEventHandler( pHandler1, "EventExposureEndData", eMyExposureEndEvent, RegistrationMode_Append, Cleanup_None );
+    camera.RegisterCameraEventHandler( pHandler1, "EventTemperatureStatusChangedStatus", eMyEventTemperatureStatusChangedStatus, RegistrationMode_Append, Cleanup_None );
 
     // Enable sending of Exposure End events.
     // Select the event to receive.
@@ -206,6 +217,16 @@ void SetEventsHandlers(CSampleCameraEventHandler* pHandler1, CBaslerUniversalIns
         if (!camera.EventNotification.TrySetValue( EventNotification_On ))
         {
             cout << "Was not able to enable event Frame Start" << endl;
+        }
+    }
+
+    // Enable event notification for the Temperature event, if available
+    if (camera.EventSelector.TrySetValue( EventSelector_TemperatureStatusChanged ))
+    {
+        // Enable it.
+        if (!camera.EventNotification.TrySetValue( EventNotification_On ))
+        {
+            cout << "Was not able to enable event Temperature Status Changed" << endl;
         }
     }
 }
@@ -231,6 +252,7 @@ bool InitCameras()
         (*cameras)[i].GrabCameraEvents = true;
         CreateAndOpenPylonDevice(tlFactory, devices[i], (*cameras)[i], i);
         SetStartupUserSet((*cameras)[i]);
+        SetParameters((*cameras)[i]);
         EnableMetadata((*cameras)[i]); 
     }
 
@@ -324,7 +346,7 @@ void GetParameters(ros::NodeHandle handler)
     handler.getParam("/stereo/norlab_basler_camera_driver_node/image_encoding", parameters["image_encoding"]);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/camera1_calibration_url", parameters["camera1_calibration_url"]);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/camera2_calibration_url", parameters["camera2_calibration_url"]);
-    handler.getParam("/stm32_node/frame_rate", frame_rate);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node/gain", gain);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/enable_bracketing", enable_bracketing);
     handler.getParam("/stereo/norlab_basler_camera_driver_node/enable_panoramic", enable_panoramic);
 }

@@ -6,7 +6,7 @@
 		<arg name="image_encoding" default="bayer_rggb12" />
 		<arg name="enable_bracketing" default="true" />
 		<arg name="enable_panoramic" default="true" />
-		<arg name="frame_rate" default="10" />
+		<arg name="gain" default="0" />
 		<arg name="camera1_calibration_url" default="package://norlab_basler_camera_driver/config/camera1_calibration_file.yaml" />
 		<arg name="camera2_calibration_url" default="package://norlab_basler_camera_driver/config/camera2_calibration_file.yaml" />
 
@@ -21,7 +21,7 @@
 			<param name="image_encoding" value="$(arg image_encoding)"/>
 			<param name="enable_bracketing" value="$(arg enable_bracketing)"/>
 			<param name="enable_panoramic" value="$(arg enable_panoramic)"/>
-			<param name="frame_rate" value="$(arg frame_rate)"/>
+			<param name="gain" value="$(arg gain)"/>
 			<param name="camera1_calibration_url" value="$(arg camera1_calibration_url)"/>
 			<param name="camera2_calibration_url" value="$(arg camera2_calibration_url)"/>
 			<rosparam param="bracketing_values">[1000.0, 2000.0, 4000.0, 8000.0, 16000.0, 32000.0]</rosparam>
