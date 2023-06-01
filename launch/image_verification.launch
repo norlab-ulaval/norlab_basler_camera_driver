@@ -1,4 +1,7 @@
 <?xml version="1.0"?>
 <launch>
-    <node name="image_verification" pkg="norlab_basler_camera_driver" type="image_verification_node" output="screen"/>
+    <arg name="file_name"/>
+    <node name="image_verification" pkg="norlab_basler_camera_driver" type="image_verification_node" output="screen">
+        <param name="file_name" value="$(arg file_name)"/>
+    </node>
 </launch>
