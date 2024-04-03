@@ -4,14 +4,14 @@ camera_name: Camera_1
 camera_matrix:
   rows: 3
   cols: 3
-  data: [ 1168.15215,     0.     ,   971.92827,
-             0.     ,  1171.06889,   582.16088,
+  data: [ 1180.80514,     0.     ,   960.74428,
+             0.     ,  1183.71696,   582.60369,
              0.     ,     0.     ,     1.     ]
 distortion_model: plumb_bob
 distortion_coefficients:
   rows: 1
   cols: 5
-  data: [-0.214855, 0.063746, -0.000591, -0.001439, 0.000000]
+  data: [-0.219776, 0.067229, -0.000356, 0.000265, 0.000000]
 rectification_matrix:
   rows: 3
   cols: 3
@@ -21,66 +21,7 @@ rectification_matrix:
 projection_matrix:
   rows: 3
   cols: 4
-  data: [ 1000.21021,     0.     ,   969.2243 ,     0.     ,
-             0.     ,  1102.88672,   579.23973,     0.     ,
+  data: [ 1011.43536,     0.     ,   962.00269,     0.     ,
+             0.     ,  1114.81543,   580.01843,     0.     ,
              0.     ,     0.     ,     1.     ,     0.     ]
-
-
-
-# image_width: 1920
-# image_height: 1200
-# camera_name: Camera_1
-# camera_matrix:
-#   rows: 3
-#   cols: 3
-#   data: [ 1186.88624,     0.     ,   939.34595,
-#              0.     ,  1189.50325,   576.59108,
-#              0.     ,     0.     ,     1.     ]
-# distortion_model: plumb_bob
-# distortion_coefficients:
-#   rows: 1
-#   cols: 5
-#   data: [-0.222406, 0.069061, 0.000457, 0.000153, 0.000000]
-# rectification_matrix:
-#   rows: 3
-#   cols: 3
-#   data: [ 1.,  0.,  0.,
-#           0.,  1.,  0.,
-#           0.,  0.,  1.]
-# projection_matrix:
-#   rows: 3
-#   cols: 4
-#   data: [ 1016.69159,     0.     ,   934.59218,     0.     ,
-#              0.     ,  1120.06555,   574.19007,     0.     ,
-#              0.     ,     0.     ,     1.     ,     0.     ]
-
-
-
-# image_width: 1920
-# image_height: 1200
-# camera_name: Camera_1
-# camera_matrix:
-#   rows: 3
-#   cols: 3
-#   data: [1.,     0.,   0.,
-#          0.,     1.,   0.,
-#          0.,     0.,   1. ]
-# distortion_model: plumb_bob
-# distortion_coefficients:
-#   rows: 1
-#   cols: 5
-#   data: [0., 0., 0., 0., 0.]
-# rectification_matrix:
-#   rows: 3
-#   cols: 3
-#   data: [1.,     0.,   0.,
-#          0.,     1.,   0.,
-#          0.,     0.,   1. ]
-# projection_matrix:
-#   rows: 3
-#   cols: 4
-#   data: [1.,     0.,   0.,  0.,
-#          0.,     1.,   0.,  0.,
-#          0.,     0.,   1.,  0. ]
-
 
