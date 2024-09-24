@@ -74,9 +74,7 @@ void Camera::FormatImagesDecompressed(const norlab_basler_camera_driver::packets
         }
         else if (bitsInput == 8)
         {
-            // Mat cv_image_RGB8(cvInputImage.cols, cvInputImage.rows, CV_8UC3);
             cvtColor(cvInputImage, cvOuputImage, COLOR_BayerRG2RGB);
-            // cv_image_RGB16.convertTo(cvOuputImage, CV_8UC3, 1.0/16);
         }
     }
     else if (bitsInput == 12 && bitsOutput == 8)
