@@ -14,7 +14,6 @@
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
 #include <camera_info_manager/camera_info_manager.h>
-#include <norlab_basler_camera_driver/packets_msg.h>
 #include <norlab_basler_camera_driver/metadata_msg.h>
 
 #include <pylon/PylonIncludes.h>
@@ -22,7 +21,6 @@
 #include <pylon/BaslerUniversalInstantCamera.h>
 #include <pylon/BaslerUniversalInstantCameraArray.h>
 #include <pylon/AcquireSingleFrameConfiguration.h>
-#include <pylon/ImageDecompressor.h>
 
 using namespace std;
 using namespace Pylon;
@@ -37,8 +35,6 @@ int camera2_index;
 
 // Params
 std::map<string, string> parameters;
-bool enable_bracketing;
-bool enable_panoramic;
 float gain;
 
 // Camera Events
@@ -52,24 +48,18 @@ vector<string> Camera2FrameStartEventsTimestamp;
 vector<string> Camera2ExposureEndEventsFrameId;
 vector<string> Camera2ExposureEndEventsTimestamp;
 
-image_transport::CameraPublisher camera1_info_pub;
-image_transport::CameraPublisher camera2_info_pub;
+image_transport::CameraPublisher camera1_image_pub;
+image_transport::CameraPublisher camera2_image_pub;
 std::unique_ptr<camera_info_manager::CameraInfoManager> c1info_;
 std::unique_ptr<camera_info_manager::CameraInfoManager> c2info_;
-ros::Publisher camera1_packets_pub;
-ros::Publisher camera2_packets_pub;
 ros::Publisher camera1_metadata_pub;
 ros::Publisher camera2_metadata_pub;
 
-norlab_basler_camera_driver::packets_msg camera1_packets_msg;
 norlab_basler_camera_driver::metadata_msg camera1_metadata_msg;
-norlab_basler_camera_driver::packets_msg camera2_packets_msg;
 norlab_basler_camera_driver::metadata_msg camera2_metadata_msg;
 
 // Init
-CImageDecompressor camera1_decompressor;
-CImageDecompressor camera2_decompressor;
-cv_bridge::CvImage camera_info_msg;
+cv_bridge::CvImage camera_msg;
 CBaslerUniversalGrabResultPtr camera1_ptrGrabResult;
 CBaslerUniversalGrabResultPtr camera2_ptrGrabResult;
 
@@ -256,8 +246,6 @@ bool InitCameras()
         EnableMetadata((*cameras)[i]); 
     }
 
-    camera1_decompressor = CImageDecompressor((*cameras)[camera1_index].GetNodeMap());
-    camera2_decompressor = CImageDecompressor((*cameras)[camera2_index].GetNodeMap());
     return true;
 }
 
@@ -266,14 +254,22 @@ void StartGrabbing()
     cameras->StartGrabbing(GrabStrategy_LatestImageOnly);
 }
 
-void PublishCamInfoData(sensor_msgs::CameraInfo camera_info, string frame_id, image_transport::CameraPublisher& publisher, ros::Time time)
+void PublishCamImage(CBaslerUniversalGrabResultPtr image_ptr, sensor_msgs::CameraInfo camera_info, string frame_id, image_transport::CameraPublisher& publisher, ros::Time time)
 {
-    camera_info_msg.header.stamp = time;
-    camera_info_msg.header.frame_id = frame_id;
+    camera_msg.header.stamp = time;
+    camera_msg.header.frame_id = frame_id;
+    if (parameters["image_encoding"] == "bayer_rggb12")
+    {
+        camera_msg.image = Mat(image_ptr->GetHeight(), image_ptr->GetWidth(), CV_16UC1, (uint16_t *) image_ptr->GetBuffer());
+    }
+    else if (parameters["image_encoding"] == "bayer_rggb8")
+    {
+    	camera_msg.image = Mat(image_ptr->GetHeight(), image_ptr->GetWidth(), CV_8UC1, (uint8_t *) image_ptr->GetBuffer());
+    }
     sensor_msgs::CameraInfoPtr ci(new sensor_msgs::CameraInfo(camera_info));
-    ci->header.frame_id = camera_info_msg.header.frame_id;
-    ci->header.stamp = camera_info_msg.header.stamp;
-    publisher.publish(camera_info_msg.toImageMsg(), ci);
+    ci->header.frame_id = camera_msg.header.frame_id;
+    ci->header.stamp = camera_msg.header.stamp;
+    publisher.publish(camera_msg.toImageMsg(), ci);
 }
 
 void PublishCamMetadata(CBaslerUniversalGrabResultPtr image_ptr, norlab_basler_camera_driver::metadata_msg& msg, ros::Publisher& publisher, ros::Time time, vector<string>& FrameStartFrameId, vector<string>& FrameStartTimestamp, vector<string>& ExposureEndFrameId, vector<string>& ExposureEndTimestamp)
@@ -296,23 +292,6 @@ void PublishCamMetadata(CBaslerUniversalGrabResultPtr image_ptr, norlab_basler_c
     publisher.publish(msg);
 }
 
-void PublishCamPackets(CImageDecompressor& camera_decompressor, CBaslerUniversalGrabResultPtr image_ptr, norlab_basler_camera_driver::packets_msg msg, ros::Publisher& publisher, ros::Time time)
-{
-    if(msg.descriptor_size == 0)
-    {
-        camera_decompressor.GetCompressionDescriptor(NULL, &msg.descriptor_size);
-        msg.descriptor.resize(msg.descriptor_size);
-    }
-    msg.header.stamp = time;
-
-    camera_decompressor.GetCompressionDescriptor(msg.descriptor.data(), &msg.descriptor_size);
-    msg.imgSize = image_ptr->GetPayloadSize();
-    msg.imgBuffer.resize(msg.imgSize);
-    memcpy(msg.imgBuffer.data(), image_ptr->GetBuffer(), msg.imgSize);
-
-    publisher.publish(msg);
-}
-
 void GrabLoop()
 {
     (*cameras)[camera2_index].RetrieveResult(500, camera2_ptrGrabResult, TimeoutHandling_ThrowException);
@@ -322,11 +301,9 @@ void GrabLoop()
     {
         ros::Time timestamp_ros = ros::Time::now();
 
-        PublishCamInfoData(c1info_->getCameraInfo(), "camera1_link", camera1_info_pub, timestamp_ros);
-        PublishCamInfoData(c2info_->getCameraInfo(), "camera2_link", camera2_info_pub, timestamp_ros);
+        PublishCamImage(camera1_ptrGrabResult, c1info_->getCameraInfo(), "camera1_link", camera1_image_pub, timestamp_ros);
+        PublishCamImage(camera2_ptrGrabResult, c2info_->getCameraInfo(), "camera2_link", camera2_image_pub, timestamp_ros);
 
-        PublishCamPackets(camera1_decompressor, camera1_ptrGrabResult, camera1_packets_msg, camera1_packets_pub, timestamp_ros);
-        PublishCamPackets(camera2_decompressor, camera2_ptrGrabResult, camera2_packets_msg, camera2_packets_pub, timestamp_ros);
         PublishCamMetadata(camera1_ptrGrabResult, camera1_metadata_msg, camera1_metadata_pub, timestamp_ros, Camera1FrameStartEventsFrameId, Camera1FrameStartEventsTimestamp, Camera1ExposureEndEventsFrameId, Camera1ExposureEndEventsTimestamp);
         PublishCamMetadata(camera2_ptrGrabResult, camera2_metadata_msg, camera2_metadata_pub, timestamp_ros, Camera2FrameStartEventsFrameId, Camera2FrameStartEventsTimestamp, Camera2ExposureEndEventsFrameId, Camera2ExposureEndEventsTimestamp);
 
@@ -342,13 +319,11 @@ void GrabLoop()
 
 void GetParameters(ros::NodeHandle handler)
 {
-    handler.getParam("/stereo/norlab_basler_camera_driver_node/startup_user_set", parameters["startup_user_set"]);
-    handler.getParam("/stereo/norlab_basler_camera_driver_node/image_encoding", parameters["image_encoding"]);
-    handler.getParam("/stereo/norlab_basler_camera_driver_node/camera1_calibration_url", parameters["camera1_calibration_url"]);
-    handler.getParam("/stereo/norlab_basler_camera_driver_node/camera2_calibration_url", parameters["camera2_calibration_url"]);
-    handler.getParam("/stereo/norlab_basler_camera_driver_node/gain", gain);
-    handler.getParam("/stereo/norlab_basler_camera_driver_node/enable_bracketing", enable_bracketing);
-    handler.getParam("/stereo/norlab_basler_camera_driver_node/enable_panoramic", enable_panoramic);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node_standard/startup_user_set", parameters["startup_user_set"]);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node_standard/image_encoding", parameters["image_encoding"]);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node_standard/camera1_calibration_url", parameters["camera1_calibration_url"]);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node_standard/camera2_calibration_url", parameters["camera2_calibration_url"]);
+    handler.getParam("/stereo/norlab_basler_camera_driver_node_standard/gain", gain);
 }
 
 void InitCameraInfo(ros::NodeHandle cam1, ros::NodeHandle cam2)
@@ -364,7 +339,7 @@ void InitCameraInfo(ros::NodeHandle cam1, ros::NodeHandle cam2)
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "norlab_basler_camera_driver_node");
+    ros::init(argc, argv, "norlab_basler_camera_driver_node_standard");
     ros::NodeHandle nh;
     ros::NodeHandle nh_cam1("camera1");
     ros::NodeHandle nh_cam2("camera2");
@@ -372,23 +347,21 @@ int main(int argc, char **argv)
 
     GetParameters(nh);
     ros::Rate r(50);
-    camera_info_msg.image = cv::Mat();
+    // camera_msg.image = cv::Mat();
     if (parameters["image_encoding"] == "bayer_rggb12")
     {
-        camera_info_msg.encoding = sensor_msgs::image_encodings::BAYER_RGGB16;
+        camera_msg.encoding = sensor_msgs::image_encodings::BAYER_RGGB16;
     }
     else if (parameters["image_encoding"] == "bayer_rggb8")
     {
-        camera_info_msg.encoding = sensor_msgs::image_encodings::BAYER_RGGB8;
+        camera_msg.encoding = sensor_msgs::image_encodings::BAYER_RGGB8;
     }
     
     image_transport::ImageTransport it_cam1(nh_cam1);
     image_transport::ImageTransport it_cam2(nh_cam2);
-    camera1_info_pub = it_cam1.advertiseCamera("empty_image", 10);
-    camera2_info_pub = it_cam2.advertiseCamera("empty_image", 10);
+    camera1_image_pub = it_cam1.advertiseCamera("image", 10);
+    camera2_image_pub = it_cam2.advertiseCamera("image", 10);
 
-    camera1_packets_pub = nh.advertise<norlab_basler_camera_driver::packets_msg>("camera1/image_compressed", 10);
-    camera2_packets_pub = nh.advertise<norlab_basler_camera_driver::packets_msg>("camera2/image_compressed", 10);
     camera1_metadata_pub = nh.advertise<norlab_basler_camera_driver::metadata_msg>("camera1/metadata", 10);
     camera2_metadata_pub = nh.advertise<norlab_basler_camera_driver::metadata_msg>("camera2/metadata", 10);
 

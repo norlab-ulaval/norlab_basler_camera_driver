@@ -153,7 +153,8 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(${PROJECT_NAME}_node src/${PROJECT_NAME}_node.cpp)
+add_executable(${PROJECT_NAME}_node_standard src/${PROJECT_NAME}_node_standard.cpp)
+add_executable(${PROJECT_NAME}_node_compressed src/${PROJECT_NAME}_node_compressed.cpp)
 add_executable(image_decompression_node src/image_decompression_node.cpp)
 add_executable(image_verification_node src/image_verification_node.cpp)
 add_executable(image_separator_node src/image_separator_node.cpp)
@@ -167,14 +168,22 @@ add_executable(image_separator_node src/image_separator_node.cpp)
 ## Add cmake target dependencies of the executable
 ## same as for the library above
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(${PROJECT_NAME}_node ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(${PROJECT_NAME}_node_standard ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(${PROJECT_NAME}_node_compressed ${PROJECT_NAME}_generate_messages_cpp)
 add_dependencies(image_decompression_node ${PROJECT_NAME}_generate_messages_cpp)
 add_dependencies(image_verification_node ${PROJECT_NAME}_generate_messages_cpp)
 add_dependencies(image_separator_node ${PROJECT_NAME}_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(
-    ${PROJECT_NAME}_node
+    ${PROJECT_NAME}_node_standard
+     ${catkin_LIBRARIES}
+     ${Pylon_LIBRARIES}
+     ${OpenCV_LIBS}
+)
+
+target_link_libraries(
+    ${PROJECT_NAME}_node_compressed
      ${catkin_LIBRARIES}
      ${Pylon_LIBRARIES}
      ${OpenCV_LIBS}

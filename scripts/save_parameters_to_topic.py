@@ -6,7 +6,7 @@ from std_msgs.msg import String
 def publish_parameters(publisher):
     fps = rospy.get_param("/stm32_node/frame_rate")
     brackets = rospy.get_param("/stm32_node/brackets")
-    gain = rospy.get_param("/stereo/norlab_basler_camera_driver_node/gain")
+    gain = rospy.get_param("/stereo/norlab_basler_camera_driver_node_compressed/gain")
     msg = "fps: {}/brackets: {}/gain: {}".format(fps, brackets, gain)
     publisher.publish(msg)
     return
