@@ -1,14 +1,16 @@
 <?xml version="1.0"?>
 <launch>
 
-	<arg name="number_of_bits_output" default="12"/>
+	<arg name="number_of_bits_input" default="8"/>
+	<arg name="number_of_bits_output" default="8"/>
     <node name="image_decompression" pkg="norlab_basler_camera_driver" type="image_decompression_node" output="screen">
+		<param name="number_of_bits_input" value="$(arg number_of_bits_input)"/>
 		<param name="number_of_bits_output" value="$(arg number_of_bits_output)"/>
 	</node>
 
 	<!-- RESIZE FOR VISUALIZATION -->
-	<arg name="enable_resize" default="true" />
-    <arg name="resize_factor" default="0.25"/>
+	<arg name="enable_resize" default="false" />
+    <arg name="resize_factor" default="1"/>
 
 	<node if="$(arg enable_resize)" name="stereo_camera1_manager" pkg="nodelet" type="nodelet" args="manager" output="screen">
 		<param name="num_worker_threads" value="3" type="int"/>
