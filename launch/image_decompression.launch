@@ -9,8 +9,8 @@
 	</node>
 
 	<!-- RESIZE FOR VISUALIZATION -->
-	<arg name="enable_resize" default="true" />
-    <arg name="resize_factor" default="0.25"/>
+	<arg name="enable_resize" default="false" />
+    <arg name="resize_factor" default="1"/>
 
 	<node if="$(arg enable_resize)" name="stereo_camera1_manager" pkg="nodelet" type="nodelet" args="manager" output="screen">
 		<param name="num_worker_threads" value="3" type="int"/>
