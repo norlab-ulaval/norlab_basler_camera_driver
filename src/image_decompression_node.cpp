@@ -57,33 +57,39 @@ void Camera::FormatImagesDecompressed(const norlab_basler_camera_driver::packets
         camera_decompressor.DecompressImage(targetImage, msg.imgBuffer.data(), msg.imgSize);
     }
     catch(...){
+        cout << "-------------------------------------------------------------------" << endl;
         cout << cameraName << ": lost an image due to compression issue" << endl;
     }
     // out_image_msg.header.stamp = msg.header.stamp;
-    if (bitsInput == 12){
-        cvInputImage = Mat(targetImage.GetHeight(), targetImage.GetWidth(), CV_16UC1, (uint16_t *) targetImage.GetBuffer());
-    }
-    else if (bitsInput == 8)
-    {
-        cvInputImage = Mat(targetImage.GetHeight(), targetImage.GetWidth(), CV_8UC1, (uint8_t *) targetImage.GetBuffer());
-    }
-    
-    if (bitsInput == bitsOutput){
+    try{
         if (bitsInput == 12){
-            cvOuputImage = cvInputImage;
+            cvInputImage = Mat(targetImage.GetHeight(), targetImage.GetWidth(), CV_16UC1, (uint16_t *) targetImage.GetBuffer());
         }
         else if (bitsInput == 8)
         {
-            cvtColor(cvInputImage, cvOuputImage, COLOR_BayerRG2RGB);
+            cvInputImage = Mat(targetImage.GetHeight(), targetImage.GetWidth(), CV_8UC1, (uint8_t *) targetImage.GetBuffer());
         }
+        
+        if (bitsInput == bitsOutput){
+            if (bitsInput == 12){
+                cvOuputImage = cvInputImage;
+            }
+            else if (bitsInput == 8)
+            {
+                cvtColor(cvInputImage, cvOuputImage, COLOR_BayerRG2RGB);
+            }
+        }
+        else if (bitsInput == 12 && bitsOutput == 8)
+        {
+            Mat cv_image_RGB16(cvInputImage.cols, cvInputImage.rows, CV_16UC3);
+            cvtColor(cvInputImage, cv_image_RGB16, COLOR_BayerRG2RGB);
+            cv_image_RGB16.convertTo(cvOuputImage, CV_8UC3, 1.0/16);
+        }
+        out_image_msg.image = cvOuputImage;
     }
-    else if (bitsInput == 12 && bitsOutput == 8)
-    {
-        Mat cv_image_RGB16(cvInputImage.cols, cvInputImage.rows, CV_16UC3);
-        cvtColor(cvInputImage, cv_image_RGB16, COLOR_BayerRG2RGB);
-        cv_image_RGB16.convertTo(cvOuputImage, CV_8UC3, 1.0/16);
+    catch(...){
+        cout << cameraName << ": Error while converting image. Lost image." << endl;
     }
-    out_image_msg.image = cvOuputImage;
 }
 
 // #################################################################################################################
