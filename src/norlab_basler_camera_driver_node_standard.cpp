@@ -281,7 +281,7 @@ void PublishCamMetadata(CBaslerUniversalGrabResultPtr image_ptr, norlab_basler_c
     vector<string>::iterator itrFrameStart = find(FrameStartFrameId.begin(), FrameStartFrameId.end(), to_string(msg.FrameId));
     vector<string>::iterator itrExposureEnd = find(ExposureEndFrameId.begin(), ExposureEndFrameId.end(), to_string(msg.FrameId));
 
-    float32_t ExposureTime = (stof(ExposureEndTimestamp[itrExposureEnd - ExposureEndFrameId.begin()]) - stof(FrameStartTimestamp[itrFrameStart - FrameStartFrameId.begin()]))*1e-6;
+    double ExposureTime = (stod(ExposureEndTimestamp[itrExposureEnd - ExposureEndFrameId.begin()]) - stod(FrameStartTimestamp[itrFrameStart - FrameStartFrameId.begin()]))*1e-3;
     msg.ExposureTime = ExposureTime;
     if(FrameStartFrameId.size() >= 3 && ExposureEndFrameId.size() >= 3){
         FrameStartFrameId.pop_back();
