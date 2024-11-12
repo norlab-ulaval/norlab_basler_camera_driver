@@ -1,0 +1,18 @@
+std_msgs/Header header
+float32 AutoTargetBrightness
+int8 AutoFunctionProfile
+float32 AutoGainLowerLimit
+float32 AutoGainUpperLimit
+float32 AutoExposureTimeLowerLimit
+float32 AutoExposureTimeUpperLimit
+float32 AutoFunctionROIWidth
+float32 AutoFunctionROIHeight
+float32 AutoFunctionROIOffsetX
+float32 AutoFunctionROIOffsetY
+bool AutoFunctionROIUseBrightness
+bool AutoFunctionROIUseWhiteBalance
+bool AutoFunctionROIHighlight
+int16 PacketSize
+int16 InterPacketDelay
+
+

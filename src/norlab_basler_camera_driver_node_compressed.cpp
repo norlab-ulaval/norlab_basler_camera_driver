@@ -7,6 +7,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 #include <chrono>
+#include <boost/bind.hpp>
 
 #include <ros/ros.h>
 #include "std_msgs/String.h"
@@ -16,6 +17,7 @@
 #include <camera_info_manager/camera_info_manager.h>
 #include <norlab_basler_camera_driver/packets_msg.h>
 #include <norlab_basler_camera_driver/metadata_msg.h>
+#include <norlab_basler_camera_driver/static_parameters_msg.h>
 
 #include <pylon/PylonIncludes.h>
 #include <pylon/BaslerUniversalCameraEventHandler.h>
@@ -58,11 +60,15 @@ ros::Publisher camera1_packets_pub;
 ros::Publisher camera2_packets_pub;
 ros::Publisher camera1_metadata_pub;
 ros::Publisher camera2_metadata_pub;
+ros::Publisher camera1_static_parameters_pub;
+ros::Publisher camera2_static_parameters_pub;
 
 norlab_basler_camera_driver::packets_msg camera1_packets_msg;
 norlab_basler_camera_driver::metadata_msg camera1_metadata_msg;
+norlab_basler_camera_driver::static_parameters_msg camera1_static_parameters_msg;
 norlab_basler_camera_driver::packets_msg camera2_packets_msg;
 norlab_basler_camera_driver::metadata_msg camera2_metadata_msg;
+norlab_basler_camera_driver::static_parameters_msg camera2_static_parameters_msg;
 
 // Init
 CImageDecompressor camera1_decompressor;
@@ -139,6 +145,12 @@ void EnableMetadata(CBaslerUniversalInstantCamera& camera)
     camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_Timestamp);
     camera.ChunkEnable.SetValue(true);
     camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_ExposureTime);
+    camera.ChunkEnable.SetValue(true);
+    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_AutoBrightnessStatus);
+    camera.ChunkEnable.SetValue(true);
+    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_Gain);
+    camera.ChunkEnable.SetValue(true);
+    camera.ChunkSelector.SetValue(Basler_UniversalCameraParams::ChunkSelector_LineStatusAll);
     camera.ChunkEnable.SetValue(true);
 }
 
@@ -274,11 +286,15 @@ void PublishCamInfoData(sensor_msgs::CameraInfo camera_info, string frame_id, im
     publisher.publish(camera_info_msg.toImageMsg(), ci);
 }
 
-void PublishCamMetadata(CBaslerUniversalGrabResultPtr image_ptr, norlab_basler_camera_driver::metadata_msg& msg, ros::Publisher& publisher, ros::Time time, vector<string>& FrameStartFrameId, vector<string>& FrameStartTimestamp, vector<string>& ExposureEndFrameId, vector<string>& ExposureEndTimestamp)
+void PublishCamMetadata(int8_t camera_index, CBaslerUniversalGrabResultPtr image_ptr, norlab_basler_camera_driver::metadata_msg& msg, ros::Publisher& publisher, ros::Time time, vector<string>& FrameStartFrameId, vector<string>& FrameStartTimestamp, vector<string>& ExposureEndFrameId, vector<string>& ExposureEndTimestamp)
 {
     msg.header.stamp = time;
     msg.FrameId = (int32_t)(image_ptr->ChunkFrameID.GetValue());
     msg.Timestamp = (int64_t)(image_ptr->ChunkTimestamp.GetValue());
+    msg.AutoBrightnessStatus = (int8_t)(image_ptr->BslChunkAutoBrightnessStatus.GetValue());
+    msg.Gain = (float32_t)(image_ptr->ChunkGain.GetValue());
+    msg.LineStatusAll = (int8_t)(image_ptr->ChunkLineStatusAll.GetValue());
+    msg.DeviceTemperature = (float32_t)((*cameras)[camera_index].DeviceTemperature.GetValue());
 
     vector<string>::iterator itrFrameStart = find(FrameStartFrameId.begin(), FrameStartFrameId.end(), to_string(msg.FrameId));
     vector<string>::iterator itrExposureEnd = find(ExposureEndFrameId.begin(), ExposureEndFrameId.end(), to_string(msg.FrameId));
@@ -291,6 +307,27 @@ void PublishCamMetadata(CBaslerUniversalGrabResultPtr image_ptr, norlab_basler_c
         ExposureEndFrameId.pop_back();
         ExposureEndTimestamp.pop_back();
     }
+    publisher.publish(msg);
+}
+
+void PublishCamStaticParameters(const ros::TimerEvent& event, int8_t camera_index, norlab_basler_camera_driver::static_parameters_msg& msg, const ros::Publisher& publisher)
+{
+    msg.header.stamp = ros::Time::now();
+    msg.AutoTargetBrightness = (float32_t)((*cameras)[camera_index].AutoTargetBrightness.GetValue());
+    msg.AutoFunctionProfile = (int8_t)((*cameras)[camera_index].AutoFunctionProfile.GetValue());
+    msg.AutoGainLowerLimit = (float32_t)((*cameras)[camera_index].AutoGainLowerLimit.GetValue());
+    msg.AutoGainUpperLimit = (float32_t)((*cameras)[camera_index].AutoGainUpperLimit.GetValue());
+    msg.AutoExposureTimeLowerLimit = (float32_t)((*cameras)[camera_index].AutoExposureTimeLowerLimit.GetValue());
+    msg.AutoExposureTimeUpperLimit = (float32_t)((*cameras)[camera_index].AutoExposureTimeUpperLimit.GetValue());
+    msg.AutoFunctionROIWidth = (float32_t)((*cameras)[camera_index].AutoFunctionROIWidth.GetValue());
+    msg.AutoFunctionROIHeight = (float32_t)((*cameras)[camera_index].AutoFunctionROIHeight.GetValue());
+    msg.AutoFunctionROIOffsetX = (float32_t)((*cameras)[camera_index].AutoFunctionROIOffsetX.GetValue());
+    msg.AutoFunctionROIOffsetY = (float32_t)((*cameras)[camera_index].AutoFunctionROIOffsetY.GetValue());
+    msg.AutoFunctionROIUseBrightness = (bool)((*cameras)[camera_index].AutoFunctionROIUseBrightness.GetValue());
+    msg.AutoFunctionROIUseWhiteBalance = (bool)((*cameras)[camera_index].AutoFunctionROIUseWhiteBalance.GetValue());
+    msg.AutoFunctionROIHighlight = (bool)((*cameras)[camera_index].AutoFunctionROIHighlight.GetValue());
+    msg.PacketSize = (int16_t)((*cameras)[camera_index].GevSCPSPacketSize.GetValue());
+    msg.InterPacketDelay = (int16_t)((*cameras)[camera_index].GevSCPD.GetValue());
     publisher.publish(msg);
 }
 
@@ -325,8 +362,10 @@ void GrabLoop()
 
         PublishCamPackets(camera1_decompressor, camera1_ptrGrabResult, camera1_packets_msg, camera1_packets_pub, timestamp_ros);
         PublishCamPackets(camera2_decompressor, camera2_ptrGrabResult, camera2_packets_msg, camera2_packets_pub, timestamp_ros);
-        PublishCamMetadata(camera1_ptrGrabResult, camera1_metadata_msg, camera1_metadata_pub, timestamp_ros, Camera1FrameStartEventsFrameId, Camera1FrameStartEventsTimestamp, Camera1ExposureEndEventsFrameId, Camera1ExposureEndEventsTimestamp);
-        PublishCamMetadata(camera2_ptrGrabResult, camera2_metadata_msg, camera2_metadata_pub, timestamp_ros, Camera2FrameStartEventsFrameId, Camera2FrameStartEventsTimestamp, Camera2ExposureEndEventsFrameId, Camera2ExposureEndEventsTimestamp);
+        PublishCamMetadata(camera1_index, camera1_ptrGrabResult, camera1_metadata_msg, camera1_metadata_pub, timestamp_ros, Camera1FrameStartEventsFrameId, Camera1FrameStartEventsTimestamp, Camera1ExposureEndEventsFrameId, Camera1ExposureEndEventsTimestamp);
+        PublishCamMetadata(camera2_index, camera2_ptrGrabResult, camera2_metadata_msg, camera2_metadata_pub, timestamp_ros, Camera2FrameStartEventsFrameId, Camera2FrameStartEventsTimestamp, Camera2ExposureEndEventsFrameId, Camera2ExposureEndEventsTimestamp);
+        // PublishCamStaticParameters(camera1_index, camera1_static_parameters_msg, camera1_static_parameters_pub);
+        // PublishCamStaticParameters(camera2_index, camera2_static_parameters_msg, camera2_static_parameters_pub);
 
         camera1_ptrGrabResult.Release();
         camera2_ptrGrabResult.Release();
@@ -387,6 +426,11 @@ int main(int argc, char **argv)
     camera2_packets_pub = nh.advertise<norlab_basler_camera_driver::packets_msg>("camera2/image_compressed", 10);
     camera1_metadata_pub = nh.advertise<norlab_basler_camera_driver::metadata_msg>("camera1/metadata", 10);
     camera2_metadata_pub = nh.advertise<norlab_basler_camera_driver::metadata_msg>("camera2/metadata", 10);
+    camera1_static_parameters_pub = nh.advertise<norlab_basler_camera_driver::static_parameters_msg>("camera1/static_parameters", 10);
+    camera2_static_parameters_pub = nh.advertise<norlab_basler_camera_driver::static_parameters_msg>("camera2/static_parameters", 10);
+
+    ros::Timer cam1_timer_static_parameters = nh.createTimer(ros::Duration(10), boost::bind(&PublishCamStaticParameters, _1, camera1_index, camera1_static_parameters_msg, camera1_static_parameters_pub));
+    ros::Timer cam2_timer_static_parameters = nh.createTimer(ros::Duration(10), boost::bind(&PublishCamStaticParameters, _1, camera2_index, camera2_static_parameters_msg, camera2_static_parameters_pub));
 
     InitCameras();
     CSampleCameraEventHandler* pHandler1 = new CSampleCameraEventHandler;
@@ -398,6 +442,7 @@ int main(int argc, char **argv)
     while ( ros::ok() )
     { 
         GrabLoop();
+        ros::spinOnce();
         r.sleep();
     }
 

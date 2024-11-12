@@ -70,6 +70,7 @@ add_message_files(
   FILES
   packets_msg.msg
   metadata_msg.msg
+  static_parameters_msg.msg
 )
 
 ## Generate services in the 'srv' folder
